@@ -11,10 +11,10 @@ const PAGE = "108107432370909";
 const ad = (id: string, text = "Trade the game."): ParsedAd => ({
   adArchiveId: id, pageId: PAGE, pageName: "Kalshi", isActive: true, startedAt: new Date("2026-09-20T00:00:00Z"), endedAt: null,
   platforms: ["facebook"], body: text, headline: "Kalshi", ctaText: "Sign Up", landingUrl: "https://kalshi.com/x",
-  landingDomain: "kalshi.com", displayFormat: "IMAGE", allText: text,
+  landingDomain: "kalshi.com", displayFormat: "IMAGE", collationCount: 1, allText: text,
 });
-const result = (status: PageResult["status"], ads: ParsedAd[]): PageResult => ({
-  status, ads, detail: "", shape: { adObjects: ads.length, topKeys: [], snapshotKeys: [] },
+const result = (status: PageResult["status"], ads: ParsedAd[], complete = status === "ok"): PageResult => ({
+  status, ads, complete, detail: "", shape: { adObjects: ads.length, topKeys: [], snapshotKeys: [] },
 });
 const t = (h: number) => new Date(Date.UTC(2026, 9, 1, h));
 
@@ -46,6 +46,13 @@ describe.skipIf(!db)("storing Meta ads", () => {
     }
     expect((await db!.competitorAd.findFirstOrThrow()).isActive).toBe(true);
     expect(await db!.adCollectionRun.count()).toBe(4);
+  });
+
+  it("never marks ads stopped after a partial run", async () => {
+    await storeResult(db!, { id: competitorId, codes: [] }, PAGE, result("ok", [ad("1"), ad("2")]), t(1), t(1));
+    const partial = await storeResult(db!, { id: competitorId, codes: [] }, PAGE, result("ok", [ad("2")], false), t(2), t(2));
+    expect(partial.stopped).toBe(0);
+    expect(await db!.competitorAd.count({ where: { isActive: true } })).toBe(2);
   });
 
   it("revives an ad that reappears", async () => {

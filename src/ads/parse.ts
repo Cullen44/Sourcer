@@ -20,6 +20,8 @@ export interface ParsedAd {
   landingUrl: string | null;
   landingDomain: string | null;
   displayFormat: string | null;
+  /** How many near-identical ads Meta grouped under this one (1 if none). */
+  collationCount: number;
   /** All text in the ad (body, headline, carousel cards), for code extraction. */
   allText: string;
 }
@@ -139,6 +141,7 @@ export function parseAd(o: Record<string, unknown>): ParsedAd {
     landingUrl,
     landingDomain: domainOf(landingUrl),
     displayFormat: str(snap.display_format),
+    collationCount: typeof o.collation_count === "number" && o.collation_count > 0 ? o.collation_count : 1,
     allText,
   };
 }
@@ -169,4 +172,13 @@ export function describeShape(bodies: string[]): { adObjects: number; topKeys: s
     if (o.snapshot && typeof o.snapshot === "object") Object.keys(o.snapshot).forEach((k) => snap.add(k));
   }
   return { adObjects: objs.length, topKeys: [...top].sort(), snapshotKeys: [...snap].sort() };
+}
+
+/** The "~1,200 results" count the Ad Library shows for a search, if present. */
+export function reportedResultCount(pageText: string): number | null {
+  const m = /~?\s*([\d,.]+)\s*(K)?\s+results?\b/i.exec(pageText);
+  if (!m) return null;
+  const n = Number(m[1]!.replace(/,/g, ""));
+  if (!Number.isFinite(n)) return null;
+  return Math.round(m[2] ? n * 1000 : n);
 }

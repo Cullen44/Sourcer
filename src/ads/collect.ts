@@ -1,11 +1,17 @@
 import type { Browser } from "playwright";
-import { describeShape, parseAds, type ParsedAd } from "./parse";
+import { describeShape, parseAds, reportedResultCount, type ParsedAd } from "./parse";
 
 export type RunStatus = "ok" | "empty" | "blocked" | "error";
 
 export interface PageResult {
   status: RunStatus;
   ads: ParsedAd[];
+  /**
+   * True only when the run provably saw every active ad (it reached the count
+   * the Ad Library reports). Ads missing from an incomplete run may simply not
+   * have loaded, so stops are only recorded after complete runs.
+   */
+  complete: boolean;
   detail: string;
   shape: ReturnType<typeof describeShape>;
 }
@@ -26,12 +32,22 @@ export function adLibraryUrl(pageId: string): string {
   return `https://www.facebook.com/ads/library/?${q}`;
 }
 
+/** Whether the ads seen account for (nearly) all of the reported results. */
+export function isComplete(ads: ParsedAd[], reported: number | null): boolean {
+  if (reported === null) return false;
+  if (reported === 0) return true;
+  // Meta's count is approximate ("~120") and may count grouped versions individually.
+  const seen = Math.max(ads.length, ads.reduce((n, a) => n + a.collationCount, 0));
+  return seen >= reported * 0.9;
+}
+
 /**
- * Load one Page's active US ads in the public Ad Library and scroll until no
- * new ads load. Reads the JSON behind the page (initial HTML plus GraphQL
- * responses), not the rendered layout.
+ * Load one Page's active US ads in the public Ad Library and keep scrolling
+ * to the bottom (which triggers the next GraphQL page) until the reported
+ * count is reached or no new ads arrive. Reads the JSON behind the page
+ * (initial HTML plus GraphQL responses), not the rendered layout.
  */
-export async function collectPage(browser: Browser, pageId: string, maxScrolls = 40): Promise<PageResult> {
+export async function collectPage(browser: Browser, pageId: string, maxScrolls = 80): Promise<PageResult> {
   const ctx = await browser.newContext({ userAgent: UA, locale: "en-US", timezoneId: "America/New_York", viewport: { width: 1366, height: 900 } });
   const page = await ctx.newPage();
   const bodies: string[] = [];
@@ -57,37 +73,38 @@ export async function collectPage(browser: Browser, pageId: string, maxScrolls =
       }
     }
 
-    const count = async () => parseAds([await page.content(), ...bodies]).length;
-    let last = await count();
+    const bodyText = async () => (await page.locator("body").innerText().catch(() => "")) ?? "";
+    const reported = reportedResultCount(await bodyText());
+    const current = async () => parseAds([await page.content(), ...bodies]).filter((a) => !a.pageId || a.pageId === pageId);
+
+    let ads = await current();
     let still = 0;
-    for (let i = 0; i < maxScrolls && still < 3; i++) {
-      await page.mouse.wheel(0, 5_000);
-      await page.waitForTimeout(2_500);
-      const n = await count();
-      still = n === last ? still + 1 : 0;
-      last = n;
+    let scrolls = 0;
+    while (scrolls < maxScrolls && still < 4 && !(reported !== null && isComplete(ads, reported))) {
+      scrolls++;
+      const next = page.waitForResponse((r) => r.url().includes("/api/graphql"), { timeout: 8_000 }).catch(() => null);
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await page.mouse.wheel(0, 2_000);
+      await next;
+      await page.waitForTimeout(1_500);
+      const n = await current();
+      still = n.length === ads.length ? still + 1 : 0;
+      ads = n;
     }
 
     const html = await page.content();
-    const all = [html, ...bodies];
-    // The page-view should only hold this Page's ads; drop anything else it embeds.
-    const ads = parseAds(all).filter((a) => !a.pageId || a.pageId === pageId);
-    const shape = describeShape(all);
+    const shape = describeShape([html, ...bodies]);
     const url = page.url();
+    const complete = isComplete(ads, reported);
+    const detail = `reported ${reported ?? "?"}, collected ${ads.length} (${ads.reduce((n, a) => n + a.collationCount, 0)} incl. grouped), ${scrolls} scrolls, ${bodies.length} graphql responses`;
 
     if (/\/login|\/checkpoint/.test(url) || (ads.length === 0 && /login_form|You must log in|Log into Facebook/i.test(html))) {
-      return { status: "blocked", ads: [], detail: `login wall (${url.slice(0, 80)})`, shape };
+      return { status: "blocked", ads: [], complete: false, detail: `login wall (${url.slice(0, 80)})`, shape };
     }
-    if (ads.length > 0) return { status: "ok", ads, detail: `${bodies.length} graphql responses`, shape };
-    const noResults = /No ads match|~?0 results/i.test(html);
-    return {
-      status: "empty",
-      ads: [],
-      detail: noResults ? "Ad Library shows no active ads" : `no ads parsed (${bodies.length} graphql responses, ${html.length} bytes html)`,
-      shape,
-    };
+    if (ads.length > 0) return { status: "ok", ads, complete, detail, shape };
+    return { status: "empty", ads: [], complete: reported === 0, detail: reported === 0 ? "Ad Library shows no active ads" : `no ads parsed; ${detail}`, shape };
   } catch (err) {
-    return { status: "error", ads: [], detail: String(err instanceof Error ? err.message : err).slice(0, 500), shape: describeShape(bodies) };
+    return { status: "error", ads: [], complete: false, detail: String(err instanceof Error ? err.message : err).slice(0, 500), shape: describeShape(bodies) };
   } finally {
     await ctx.close();
   }

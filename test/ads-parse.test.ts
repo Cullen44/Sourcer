@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { describeShape, extractJsonDocs, parseAds, unwrapLink } from "../src/ads/parse";
+import { isComplete } from "../src/ads/collect";
+import { describeShape, extractJsonDocs, parseAds, reportedResultCount, unwrapLink } from "../src/ads/parse";
 
 // Shaped like Ad Library data as community scrapers document it. The live
 // format is confirmed by the collector's --probe run against real pages.
@@ -81,5 +82,21 @@ describe("Meta Ad Library parsing", () => {
     expect(extractJsonDocs("for (;;);{bad json")).toEqual([]);
     expect(parseAds(["<html></html>", "", "{}"])).toEqual([]);
     expect(unwrapLink("not a url")).toBeNull();
+  });
+
+  it("reads the reported result count", () => {
+    expect(reportedResultCount("Kalshi\n~120 results\nSort")).toBe(120);
+    expect(reportedResultCount("~1,240 results")).toBe(1240);
+    expect(reportedResultCount("~1.2K results")).toBe(1200);
+    expect(reportedResultCount("1 result")).toBe(1);
+    expect(reportedResultCount("nothing here")).toBeNull();
+  });
+
+  it("treats a run as complete only when it reached the reported count", () => {
+    const ads = parseAds([html([ad("1"), ad("2", { collation_count: 3 })])]);
+    expect(isComplete(ads, null)).toBe(false);
+    expect(isComplete(ads, 0)).toBe(true);
+    expect(isComplete(ads, 4)).toBe(true); // 1 + 3 grouped
+    expect(isComplete(ads, 30)).toBe(false);
   });
 });

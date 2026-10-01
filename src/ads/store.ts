@@ -5,8 +5,9 @@ import type { PageResult } from "./collect";
 /**
  * Record one Page's collection. Ads seen are upserted (first/last observed);
  * codes in ad copy are added to promo_codes so the YouTube search picks them
- * up. Only after an "ok" run are this Page's previously active ads that were
- * not seen marked stopped, so a blocked or broken scrape can't fake a mass stop.
+ * up. Only after a complete run (every active ad seen) are this Page's
+ * previously active ads that were not seen marked stopped, so a blocked,
+ * broken or partial scrape can't fake a mass stop.
  */
 export async function storeResult(
   db: Db,
@@ -58,7 +59,7 @@ export async function storeResult(
   }
 
   let stopped = 0;
-  if (result.status === "ok") {
+  if (result.complete) {
     const r = await db.competitorAd.updateMany({
       where: { competitorId: competitor.id, pageId, isActive: true, lastObservedAt: { lt: startedAt } },
       data: { isActive: false, stoppedAt: now },

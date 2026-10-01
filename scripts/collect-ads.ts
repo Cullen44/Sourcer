@@ -21,7 +21,7 @@ try {
       const stored = await storeResult(db, { id: c.id, codes: c.codes.map((x) => x.code) }, pageId, result, startedAt);
       if (result.status === "ok" || result.status === "empty") okPages++;
       console.log(
-        `${c.name} (${pageId}): ${result.status}, ${result.ads.length} active ads, ${stored.newAds} new, ` +
+        `${c.name} (${pageId}): ${result.status}${result.complete ? ", complete" : ", PARTIAL (no stops recorded)"}, ${result.ads.length} active ads, ${stored.newAds} new, ` +
           `${stored.stopped} stopped, ${stored.newCodes.length} new codes. ${result.detail}`,
       );
       if (probe || result.status !== "ok") console.log(`  shape: ${JSON.stringify(result.shape)}`);
