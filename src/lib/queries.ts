@@ -273,3 +273,36 @@ export async function getPromoCodes() {
     orderBy: [{ competitor: { priority: "asc" } }, { competitor: { name: "asc" } }, { firstSeenAt: "asc" }],
   });
 }
+
+// ---------------------------------------------------------------------------
+// Meta ads
+// ---------------------------------------------------------------------------
+
+export async function listAds(f: { competitor?: number; status: string; q: string }) {
+  return db.competitorAd.findMany({
+    where: {
+      ...(f.competitor ? { competitorId: f.competitor } : {}),
+      ...(f.status === "active" ? { isActive: true } : f.status === "stopped" ? { isActive: false } : {}),
+      ...(f.q.trim()
+        ? { OR: [{ creativeText: { contains: f.q.trim(), mode: "insensitive" as const } }, { headline: { contains: f.q.trim(), mode: "insensitive" as const } }, { promoCode: { contains: f.q.trim(), mode: "insensitive" as const } }] }
+        : {}),
+    },
+    include: { competitor: true },
+    orderBy: [{ startedAt: { sort: "desc", nulls: "last" } }, { id: "desc" }],
+    take: 300,
+  });
+}
+
+export async function adSummary() {
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+  const competitors = await db.competitor.findMany({ orderBy: [{ priority: "asc" }, { name: "asc" }] });
+  return Promise.all(
+    competitors.map(async (c) => ({
+      competitor: c,
+      active: await db.competitorAd.count({ where: { competitorId: c.id, isActive: true } }),
+      newThisWeek: await db.competitorAd.count({ where: { competitorId: c.id, firstObservedAt: { gte: weekAgo } } }),
+      stoppedThisWeek: await db.competitorAd.count({ where: { competitorId: c.id, stoppedAt: { gte: weekAgo } } }),
+      lastRun: await db.adCollectionRun.findFirst({ where: { competitorId: c.id }, orderBy: { startedAt: "desc" } }),
+    })),
+  );
+}
