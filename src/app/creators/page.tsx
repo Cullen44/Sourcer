@@ -15,19 +15,35 @@ const PLATFORMS: { key: Platform; label: string }[] = [
 export default async function Creators({ searchParams }: { searchParams: Search }) {
   const sp = await searchParams;
   const platform = (["all", "twitch", "youtube"].includes(sp.platform ?? "") ? sp.platform : "all") as Platform;
+  const int = (v: string | undefined) => (v && /^\d+$/.test(v.trim()) ? Number(v.trim()) : null);
+  const showTwitch = platform !== "youtube";
+  const showYoutube = platform !== "twitch";
   const filters = {
     q: sp.q ?? "",
     title: sp.title ?? "",
     // YouTube doesn't report channel language, so the filter only applies to Twitch.
-    lang: platform === "youtube" ? "" : (sp.lang ?? ""),
+    lang: showTwitch ? (sp.lang ?? "") : "",
     platform,
     page: Math.max(1, Number(sp.page) || 1),
+    twitchViewersMin: showTwitch ? int(sp.twitchViewersMin) : null,
+    twitchViewersMax: showTwitch ? int(sp.twitchViewersMax) : null,
+    twitchStreamsMin: showTwitch ? int(sp.twitchStreamsMin) : null,
+    ytViewsMin: showYoutube ? int(sp.ytViewsMin) : null,
+    ytViewsMax: showYoutube ? int(sp.ytViewsMax) : null,
+    ytUploadsMin: showYoutube ? int(sp.ytUploadsMin) : null,
+    activeDays: int(sp.activeDays),
   };
   const [{ rows, total }, opts] = await Promise.all([listCreators(filters), filterOptions()]);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const href = (over: Partial<typeof filters>) =>
-    `/creators?${new URLSearchParams(Object.entries({ ...filters, ...over }).map(([k, v]) => [k, String(v)]))}`;
-  const anyFilter = filters.q || filters.title || filters.lang;
+    `/creators?${new URLSearchParams(
+      Object.entries({ ...filters, ...over }).flatMap(([k, v]) => (v === null || v === "" ? [] : [[k, String(v)]])),
+    )}`;
+  const numericSet = [filters.twitchViewersMin, filters.twitchViewersMax, filters.twitchStreamsMin, filters.ytViewsMin, filters.ytViewsMax, filters.ytUploadsMin, filters.activeDays].some((v) => v !== null);
+  const anyFilter = filters.q || filters.title || filters.lang || numericSet;
+  const numInput = (name: keyof typeof filters, placeholder: string) => (
+    <input name={name} type="number" min={0} inputMode="numeric" placeholder={placeholder} defaultValue={filters[name] === null ? "" : String(filters[name])} className="num-input" />
+  );
 
   return (
     <>
@@ -39,7 +55,7 @@ export default async function Creators({ searchParams }: { searchParams: Search 
 
       <div className="tabs">
         {PLATFORMS.map((p) => (
-          <Link key={p.key} href={href({ platform: p.key, page: 1, ...(p.key === "youtube" ? { lang: "" } : {}) })} className={platform === p.key ? "active" : ""}>
+          <Link key={p.key} href={href({ platform: p.key, page: 1 })} className={platform === p.key ? "active" : ""}>
             {p.label}
           </Link>
         ))}
@@ -52,15 +68,43 @@ export default async function Creators({ searchParams }: { searchParams: Search 
           <option value="">All titles</option>
           {opts.titles.map((t) => <option key={t}>{t}</option>)}
         </select>
-        {platform !== "youtube" && (
+        {showTwitch && (
           <select name="lang" defaultValue={filters.lang}>
             <option value="">All languages</option>
             {opts.langs.map((l) => <option key={l.language} value={l.language}>{l.language} ({l.n})</option>)}
           </select>
         )}
-        <button type="submit">Filter</button>
-        {anyFilter && <Link href={`/creators?platform=${platform}`} style={{ alignSelf: "center" }}>Clear</Link>}
+        <select name="activeDays" defaultValue={filters.activeDays === null ? "" : String(filters.activeDays)}>
+          <option value="">Active any time</option>
+          <option value="1">Active in last day</option>
+          <option value="3">Active in last 3 days</option>
+          <option value="7">Active in last 7 days</option>
+          <option value="30">Active in last 30 days</option>
+        </select>
+        <div className="filter-row">
+          {showTwitch && (
+            <fieldset>
+              <legend>Twitch</legend>
+              <label>Avg viewers {numInput("twitchViewersMin", "min")} – {numInput("twitchViewersMax", "max")}</label>
+              <label>Streams 7d ≥ {numInput("twitchStreamsMin", "min")}</label>
+            </fieldset>
+          )}
+          {showYoutube && (
+            <fieldset>
+              <legend>YouTube</legend>
+              <label>Median views {numInput("ytViewsMin", "min")} – {numInput("ytViewsMax", "max")}</label>
+              <label>Uploads 30d ≥ {numInput("ytUploadsMin", "min")}</label>
+            </fieldset>
+          )}
+          <button type="submit">Filter</button>
+          {anyFilter && <Link href={`/creators?platform=${platform}`} style={{ alignSelf: "center" }}>Clear</Link>}
+        </div>
       </form>
+      {platform === "all" && numericSet && (
+        <p className="muted" style={{ fontSize: 12, marginTop: -4 }}>
+          A Twitch number filter only matches creators with Twitch data, and a YouTube one only creators with a tracked YouTube channel.
+        </p>
+      )}
       {platform === "all" && filters.lang && (
         <p className="muted" style={{ fontSize: 12, marginTop: -4 }}>Language filter applies to Twitch only, so YouTube-only channels are hidden.</p>
       )}

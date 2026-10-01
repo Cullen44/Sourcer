@@ -1,3 +1,4 @@
+import { groupAds } from "../ads/group";
 import type { Db } from "../db";
 
 /**
@@ -37,7 +38,7 @@ export async function getChanges(db: Db, days = 7, now = new Date()) {
 
     const reported = lastRuns.some((r) => r.reportedCount !== null) ? lastRuns.reduce((n, r) => n + (r.reportedCount ?? 0), 0) : null;
     const complete = lastRuns.length > 0 && lastRuns.every((r) => r.complete);
-    out.push({ competitor: c, active, reported, complete, newAds, stoppedAds, newCodes, newCreators: [...newCreators.values()], newDomains, lastRuns });
+    out.push({ competitor: c, active, reported, complete, newAds, newAdGroups: groupAds(newAds), stoppedAds, newCodes, newCreators: [...newCreators.values()], newDomains, lastRuns });
   }
   return { since, now, days, competitors: out };
 }
@@ -60,12 +61,14 @@ export function changesToMarkdown(ch: Changes): string {
     }
     if (c.newDomains.length) lines.push(`**New landing domains:** ${c.newDomains.join(", ")}`, "");
     if (c.newCodes.length) lines.push(`**New codes:** ${c.newCodes.map((x) => `\`${x.code}\` (${x.source})`).join(", ")}`, "");
-    if (c.newAds.length) {
-      lines.push("**New ads**", "");
-      for (const a of c.newAds.slice(0, 15)) {
-        lines.push(`- ${d(a.startedAt)} · ${a.landingDomain ?? "no link"}${a.promoCode ? ` · code ${a.promoCode}` : ""}: ${(a.creativeText ?? a.headline ?? "").replace(/\s+/g, " ").slice(0, 160)}`);
+    if (c.newAdGroups.length) {
+      lines.push(`**New ads** (${c.newAds.length} ads, ${c.newAdGroups.length} distinct)`, "");
+      for (const g of c.newAdGroups.slice(0, 15)) {
+        const a = g.ad;
+        const variants = g.variants.length > 1 ? ` · ×${g.variants.length} variants` : "";
+        lines.push(`- ${d(g.lastStarted)} · ${a.landingDomain ?? "no link"}${a.promoCode ? ` · code ${a.promoCode}` : ""}${variants}: ${[a.headline, a.creativeText].filter(Boolean).join(" / ").replace(/\s+/g, " ").slice(0, 180)}`);
       }
-      if (c.newAds.length > 15) lines.push(`- …and ${c.newAds.length - 15} more`);
+      if (c.newAdGroups.length > 15) lines.push(`- …and ${c.newAdGroups.length - 15} more`);
       lines.push("");
     }
     if (c.stoppedAds.length) lines.push(`**Stopped:** ${c.stoppedAds.length} ads (ran since ${d(c.stoppedAds.at(-1)?.startedAt)})`, "");

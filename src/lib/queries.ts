@@ -1,3 +1,4 @@
+import { groupAds } from "../ads/group";
 import { db } from "./db";
 
 /**
@@ -63,6 +64,15 @@ export interface CreatorFilters {
   lang: string;
   platform: Platform;
   page: number;
+  /** Numeric filters; null = not set. A Twitch filter only matches creators with Twitch data, likewise YouTube. */
+  twitchViewersMin?: number | null;
+  twitchViewersMax?: number | null;
+  twitchStreamsMin?: number | null;
+  ytViewsMin?: number | null;
+  ytViewsMax?: number | null;
+  ytUploadsMin?: number | null;
+  /** Active within this many days. */
+  activeDays?: number | null;
 }
 
 export const PAGE_SIZE = 50;
@@ -108,12 +118,23 @@ export async function listCreators(f: CreatorFilters) {
     SELECT * FROM u
     WHERE ($1 = '' OR name ILIKE '%' || $1 || '%' OR search_a ILIKE '%' || $1 || '%' OR search_b ILIKE '%' || $1 || '%')
       AND ($2 = '' OR $2 = ANY(titles))
-      AND ($3 = '' OR language = $3)`;
-  const args = [f.q.trim(), f.title, f.lang, f.platform];
+      AND ($3 = '' OR language = $3)
+      AND ($5::int IS NULL OR avg_viewers >= $5::int)
+      AND ($6::int IS NULL OR avg_viewers <= $6::int)
+      AND ($7::int IS NULL OR streams >= $7::int)
+      AND ($8::int IS NULL OR yt_median_views >= $8::int)
+      AND ($9::int IS NULL OR yt_median_views <= $9::int)
+      AND ($10::int IS NULL OR yt_uploads_30d >= $10::int)
+      AND ($11::int IS NULL OR last_active >= (now() AT TIME ZONE 'UTC') - make_interval(days => $11::int))`;
+  const args = [
+    f.q.trim(), f.title, f.lang, f.platform,
+    f.twitchViewersMin ?? null, f.twitchViewersMax ?? null, f.twitchStreamsMin ?? null,
+    f.ytViewsMin ?? null, f.ytViewsMax ?? null, f.ytUploadsMin ?? null, f.activeDays ?? null,
+  ];
 
   const [rows, total] = await Promise.all([
     db.$queryRawUnsafe<CreatorRow[]>(
-      `${union} ORDER BY last_active DESC NULLS LAST, key LIMIT ${PAGE_SIZE} OFFSET $5`,
+      `${union} ORDER BY last_active DESC NULLS LAST, key LIMIT ${PAGE_SIZE} OFFSET $12`,
       ...args,
       (f.page - 1) * PAGE_SIZE,
     ),
@@ -278,8 +299,9 @@ export async function getPromoCodes() {
 // Meta ads
 // ---------------------------------------------------------------------------
 
+/** Ads matching the filters, with identical variants grouped into one entry. */
 export async function listAds(f: { competitor?: number; status: string; q: string }) {
-  return db.competitorAd.findMany({
+  const ads = await db.competitorAd.findMany({
     where: {
       ...(f.competitor ? { competitorId: f.competitor } : {}),
       ...(f.status === "active" ? { isActive: true } : f.status === "stopped" ? { isActive: false } : {}),
@@ -289,8 +311,9 @@ export async function listAds(f: { competitor?: number; status: string; q: strin
     },
     include: { competitor: true },
     orderBy: [{ startedAt: { sort: "desc", nulls: "last" } }, { id: "desc" }],
-    take: 300,
+    take: 2000,
   });
+  return groupAds(ads);
 }
 
 export async function adSummary() {
@@ -303,9 +326,11 @@ export async function adSummary() {
         c.fbPageIds.map((pageId) => db.adCollectionRun.findFirst({ where: { competitorId: c.id, pageId }, orderBy: { startedAt: "desc" } })),
       );
       const latest = runs.filter((r) => r !== null);
+      const activeAds = await db.competitorAd.findMany({ where: { competitorId: c.id, isActive: true } });
       return {
         competitor: c,
-        active: await db.competitorAd.count({ where: { competitorId: c.id, isActive: true } }),
+        active: activeAds.length,
+        distinct: groupAds(activeAds).length,
         newThisWeek: await db.competitorAd.count({ where: { competitorId: c.id, firstObservedAt: { gte: weekAgo } } }),
         stoppedThisWeek: await db.competitorAd.count({ where: { competitorId: c.id, stoppedAt: { gte: weekAgo } } }),
         lastRun: latest.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0] ?? null,
