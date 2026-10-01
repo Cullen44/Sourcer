@@ -1,5 +1,5 @@
 import type { Browser } from "playwright";
-import { describeShape, parseAds, reportedResultCount, type ParsedAd } from "./parse";
+import { describeShape, extractJsonDocs, parseAds, reportedResultCount, type ParsedAd } from "./parse";
 
 export type RunStatus = "ok" | "empty" | "blocked" | "error";
 
@@ -55,12 +55,14 @@ export async function collectPage(browser: Browser, pageId: string, maxScrolls =
   page.on("response", async (r) => {
     if (r.url().includes("/api/graphql")) {
       // Request names (not content) help diagnose which query paginates.
-      const name = /fb_api_req_friendly_name=([^&]+)/.exec(r.request().postData() ?? "")?.[1];
-      if (name) queryNames.push(decodeURIComponent(name));
+      const name = decodeURIComponent(/fb_api_req_friendly_name=([^&]+)/.exec(r.request().postData() ?? "")?.[1] ?? "?");
+      queryNames.push(name);
       try {
-        bodies.push(await r.text());
-      } catch {
-        /* response gone */
+        const text = await r.text();
+        bodies.push(text);
+        if (debug && name.includes("Pagination")) debug(`    ${name}: ${describeResponse(r.status(), text)}`);
+      } catch (err) {
+        debug?.(`    ${name}: body unreadable (${err instanceof Error ? err.message : err})`);
       }
     }
   });
@@ -127,4 +129,13 @@ export async function collectPage(browser: Browser, pageId: string, maxScrolls =
   } finally {
     await ctx.close();
   }
+}
+
+/** A content-free summary of a GraphQL response, for diagnosing pagination. */
+function describeResponse(status: number, text: string): string {
+  const ids = (text.match(/"ad_archive_id"/g) ?? []).length;
+  const errors = [...text.matchAll(/"(?:message|summary|description)":"([^"]{0,140})"/g)].map((m) => m[1]).slice(0, 3);
+  const start = text.slice(0, 60).replace(/[^\x20-\x7e]/g, "?");
+  const docs = extractJsonDocs(text).length;
+  return `HTTP ${status}, ${text.length} bytes, ${docs} JSON docs, ${ids} ad_archive_id, starts "${start}"${errors.length ? `, messages: ${errors.join(" | ")}` : ""}`;
 }

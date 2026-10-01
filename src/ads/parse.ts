@@ -38,7 +38,9 @@ export function extractJsonDocs(text: string): unknown[] {
       /* not JSON; ignore */
     }
   };
-  if (/<html|<script/i.test(text)) {
+  // HTML pages start with markup; GraphQL bodies start with JSON or "for (;;);".
+  // (Checking for "<script" anywhere would misfire on JSON that embeds markup.)
+  if (/^\s*</.test(text)) {
     for (const m of text.matchAll(/<script[^>]*type="application\/json"[^>]*>([\s\S]*?)<\/script>/g)) tryParse(m[1]!);
   } else {
     // GraphQL responses may stream several JSON documents, one per line.
