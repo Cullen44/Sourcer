@@ -13,14 +13,14 @@ export default async function CreatorPage({ params }: { params: Promise<{ id: st
 
   return (
     <>
-      <p className="sub"><Link href="/creators">← Creators</Link></p>
+      <p className="sub"><Link href="/creators">← Twitch creators</Link></p>
       <h1>{c.displayName}</h1>
       <p className="sub">
         <a href={`https://twitch.tv/${c.login}`} target="_blank" rel="noreferrer">twitch.tv/{c.login}</a>
         {c.broadcasterType ? ` · ${c.broadcasterType}` : ""} · first seen {ago(c.firstSeenAt)} · last seen on a
         target title {ago(c.lastSeenAt)}
         {c.youtubeChannels.map((y) => (
-          <span key={y.channelId}> · <a href={`https://youtube.com/channel/${y.channelId}`} target="_blank" rel="noreferrer">YouTube</a></span>
+          <span key={y.channelId}> · <Link href={`/youtube/${y.channelId}`}>YouTube: {y.title ?? "channel"}</Link></span>
         ))}
       </p>
       {c.description && <p className="note-box">{c.description}</p>}

@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { getOverview } from "../lib/queries";
+import { getOverview, getYoutubeOverview } from "../lib/queries";
 import { ago, num } from "./format";
 
 export const dynamic = "force-dynamic";
 
 export default async function Overview() {
-  const o = await getOverview();
+  const [o, yt] = await Promise.all([getOverview(), getYoutubeOverview()]);
   const minsSinceOk = o.lastOk ? (Date.now() - o.lastOk.startedAt.getTime()) / 60_000 : Infinity;
   // Scheduled runs drift; treat up to ~1h as normal, beyond that as stalled.
   const health = minsSinceOk <= 45 ? "ok" : minsSinceOk <= 90 ? "warn" : "bad";
@@ -36,6 +36,13 @@ export default async function Overview() {
           <div className="label">Stream readings</div>
           <div className="value">{num(o.observations)}</div>
           <div className="note">raw, last 7 days</div>
+        </div>
+        <div className="card">
+          <div className="label">YouTube channels</div>
+          <div className="value">{num(yt.counts.tracked ?? 0)}</div>
+          <div className="note">
+            tracked · {num(yt.counts.rejected ?? 0)} rejected · {num(yt.counts.candidate ?? 0)} waiting · {num(yt.unitsToday)} / 10,000 units today
+          </div>
         </div>
         <div className="card">
           <div className="label">Sponsor mentions</div>

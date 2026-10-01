@@ -149,17 +149,94 @@ export async function getCreator(id: number) {
   return { creator, games, streams: streams.slice(0, 30), daily };
 }
 
-export async function getSponsors() {
+export async function getSponsors(f: { competitor?: number; minViews?: number } = {}) {
   const [competitors, mentions] = await Promise.all([
     db.competitor.findMany({
       orderBy: [{ priority: "asc" }, { name: "asc" }],
-      include: { _count: { select: { ads: { where: { isActive: true } }, mentions: true } } },
+      include: { _count: { select: { ads: { where: { isActive: true } }, mentions: true, codes: true } } },
     }),
     db.sponsorMention.findMany({
-      orderBy: { observedAt: "desc" },
-      take: 100,
+      where: {
+        ...(f.competitor ? { competitorId: f.competitor } : {}),
+        ...(f.minViews ? { viewCount: { gte: BigInt(f.minViews) } } : {}),
+      },
+      orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { id: "desc" }],
+      take: 200,
       include: { competitor: true, creator: true },
     }),
   ]);
   return { competitors, mentions };
+}
+
+// ---------------------------------------------------------------------------
+// YouTube
+// ---------------------------------------------------------------------------
+
+export interface YoutubeFilters {
+  q: string;
+  title: string;
+  status: string;
+  source: string;
+  page: number;
+}
+
+export async function listYoutubeChannels(f: YoutubeFilters) {
+  const where = {
+    status: f.status || "tracked",
+    ...(f.title ? { primaryTitle: f.title } : {}),
+    ...(f.source ? { source: f.source } : {}),
+    ...(f.q.trim()
+      ? { OR: [{ title: { contains: f.q.trim(), mode: "insensitive" as const } }, { handle: { contains: f.q.trim(), mode: "insensitive" as const } }] }
+      : {}),
+  };
+  const [rows, total] = await Promise.all([
+    db.youtubeChannel.findMany({
+      where,
+      include: { creator: { select: { id: true, displayName: true } } },
+      orderBy: [{ lastUploadAt: { sort: "desc", nulls: "last" } }, { id: "asc" }],
+      take: PAGE_SIZE,
+      skip: (f.page - 1) * PAGE_SIZE,
+    }),
+    db.youtubeChannel.count({ where }),
+  ]);
+  return { rows, total };
+}
+
+export async function youtubeStatusCounts() {
+  const rows = await db.youtubeChannel.groupBy({ by: ["status"], _count: { _all: true } });
+  return Object.fromEntries(rows.map((r) => [r.status, r._count._all])) as Record<string, number>;
+}
+
+export async function getYoutubeChannel(channelId: string) {
+  const channel = await db.youtubeChannel.findUnique({
+    where: { channelId },
+    include: {
+      creator: { select: { id: true, displayName: true, login: true } },
+      videos: { orderBy: { publishedAt: "desc" }, take: 25 },
+      daily: { orderBy: { date: "desc" }, take: 30 },
+    },
+  });
+  if (!channel) return null;
+  const mentions = await db.sponsorMention.findMany({
+    where: { externalChannelId: channelId },
+    include: { competitor: true },
+    orderBy: { publishedAt: "desc" },
+  });
+  return { channel, mentions };
+}
+
+export async function getYoutubeOverview() {
+  const { quotaDay } = await import("../youtube/usage");
+  const [counts, usage] = await Promise.all([
+    youtubeStatusCounts(),
+    db.youtubeUsage.findUnique({ where: { date: new Date(`${quotaDay()}T00:00:00Z`) } }),
+  ]);
+  return { counts, unitsToday: usage?.units ?? 0 };
+}
+
+export async function getPromoCodes() {
+  return db.promoCode.findMany({
+    include: { competitor: true },
+    orderBy: [{ competitor: { priority: "asc" } }, { competitor: { name: "asc" } }, { firstSeenAt: "asc" }],
+  });
 }

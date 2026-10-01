@@ -13,8 +13,8 @@ The pipeline does deterministic work only (fetch, store, aggregate, score). Judg
 |---|---|---|
 | 0 | Schema, migrations, CI | Done |
 | 1 | Twitch poller + nightly rollup/retention | Live |
-| 2 | Sponsor watch: Meta Ad Library, promo-code lookup, weekly diff | Next |
-| 3 | Twitch user + YouTube enrichment | |
+| 2 | Sponsor watch: YouTube promo-code search, Twitch title scan | Done (Meta Ad Library and weekly diff next) |
+| 3 | Twitch profiles, YouTube links from Twitch bios, YouTube discovery | Done |
 | 4 | Scoring + CSV/Markdown export | Needs ~1 week of data |
 | 5 | Local viewer (browse only, no rankings) | Done |
 
@@ -23,7 +23,9 @@ The pipeline does deterministic work only (fetch, store, aggregate, score). Judg
 GitHub Actions, no server:
 
 - `poll.yml`, every 20 min: live streams on each target game down to `VIEWER_FLOOR`, plus every tracked creator's live stream in *any* category. Without that second sweep, relevance (share of streaming on target titles) can't be computed.
-- `nightly.yml`: rolls observations up into `creator_daily` and deletes raw rows older than 7 days.
+- `nightly.yml`, 08:15 UTC (after the YouTube quota resets at midnight Pacific): applies migrations, rolls observations up into `creator_daily` and deletes raw rows older than 7 days, then runs `npm run daily`:
+  - Twitch profiles for new creators, and a scan of stream titles for competitor names and codes (free).
+  - YouTube, each stage capped to its share of the 10,000 units/day (see `src/config/youtube.ts`): links from Twitch bios, promo-code search, discovery search, vetting, refresh of tracked channels.
 - `setup-db.yml`, manual: applies migrations and seeds games and competitors.
 
 Scheduled workflows stay off until the repo variable `POLLER_ENABLED` is `true`.
@@ -74,6 +76,19 @@ npm run poll
 npm run rollup
 npm test               # integration tests need TEST_DATABASE_URL
 ```
+
+## YouTube discovery
+
+Discovery is a funnel, so it can't flood the database with every gaming channel on YouTube:
+
+1. **Search**: once a day, one recent-uploads search and one live search per target title (US, English, Gaming category). Every channel found becomes a *candidate*.
+2. **Vet**: candidates are checked against the filters in `src/config/youtube.ts`. By default:
+   - at least 50% of the last 20 uploads are about a target title;
+   - 4+ uploads in the last 30 days;
+   - median views on recent uploads between 1,000 and 250,000 (long-form uploads older than 2 days; Shorts ignored when there are enough long videos).
+3. **Admit**: at most 25 new channels a day and 400 in total. Rejected channels keep their reason and are only re-checked if they reappear in search after 30 days.
+
+Channels linked from a Twitch creator's bio skip the filters, since the creator is already in scope. Channels found carrying a competitor's code enter as candidates and are vetted like any other.
 
 ## Notes
 

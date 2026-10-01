@@ -9,10 +9,14 @@ try {
     const existing = await db.competitor.findUnique({ where: { name: c.name } });
     const knownCodes = [...new Set([...(existing?.knownCodes ?? []), ...c.knownCodes])];
     const domains = [...new Set([...(existing?.domains ?? []), ...c.domains])];
-    await db.competitor.upsert({
+    const row = await db.competitor.upsert({
       where: { name: c.name },
       create: { ...c, knownCodes, domains },
       update: { priority: c.priority, knownCodes, domains, ...(c.fbPageId ? { fbPageId: c.fbPageId } : {}) },
+    });
+    await db.promoCode.createMany({
+      data: c.knownCodes.map((code) => ({ competitorId: row.id, code, source: "seed" })),
+      skipDuplicates: true,
     });
   }
   console.log(`Seeded ${COMPETITORS.length} competitors`);

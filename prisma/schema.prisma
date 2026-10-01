@@ -42,6 +42,8 @@ model Creator {
   firstSeenAt      DateTime  @default(now()) @map("first_seen_at")
   lastSeenAt       DateTime  @default(now()) @map("last_seen_at")
   enrichedAt       DateTime? @map("enriched_at")
+  /// When the bio was last checked for a YouTube link (found or not).
+  youtubeCheckedAt DateTime? @map("youtube_checked_at")
 
   observations     StreamObservation[]
   daily            CreatorDaily[]
@@ -112,37 +114,83 @@ model CreatorDaily {
   @@map("creator_daily")
 }
 
+/// A YouTube channel, from one of three sources:
+///   twitch_link: linked from a Twitch creator's profile (always tracked)
+///   discovery:   found by title searches; must pass the vetting filters
+///   sponsor:     found carrying a competitor's name or code (not vetted)
+/// status: candidate (not yet vetted) | tracked | rejected (rejectReason says why)
 model YoutubeChannel {
-  id                Int      @id @default(autoincrement())
-  creatorId         Int?     @map("creator_id")
-  channelId         String   @unique @map("channel_id")
+  id                Int       @id @default(autoincrement())
+  creatorId         Int?      @map("creator_id")
+  channelId         String    @unique @map("channel_id")
   title             String?
-  subscriberCount   BigInt?  @map("subscriber_count")
-  totalViews        BigInt?  @map("total_views")
-  videoCount        Int?     @map("video_count")
-  uploadsPlaylistId String?  @map("uploads_playlist_id")
-  matchMethod       String?  @map("match_method")
-  fetchedAt         DateTime @default(now()) @map("fetched_at")
+  handle            String?
+  country           String?
+  source            String
+  status            String    @default("candidate")
+  rejectReason      String?   @map("reject_reason")
+  subscriberCount   BigInt?   @map("subscriber_count")
+  totalViews        BigInt?   @map("total_views")
+  videoCount        Int?      @map("video_count")
+  uploadsPlaylistId String?   @map("uploads_playlist_id")
+  /// Canonical target title most of its recent uploads are about.
+  primaryTitle      String?   @map("primary_title")
+  /// Share of recent uploads that are about any target title (0-1).
+  titleShare        Float?    @map("title_share")
+  medianViews       Int?      @map("median_views")
+  uploads30d        Int?      @map("uploads_30d")
+  lastUploadAt      DateTime? @map("last_upload_at")
+  discoveredAt      DateTime  @default(now()) @map("discovered_at")
+  lastSeenInSearch  DateTime? @map("last_seen_in_search")
+  vettedAt          DateTime? @map("vetted_at")
+  fetchedAt         DateTime  @default(now()) @map("fetched_at")
 
-  creator Creator?       @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  creator Creator?              @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   videos  YoutubeVideo[]
+  daily   YoutubeChannelDaily[]
 
+  @@index([status])
   @@map("youtube_channels")
 }
 
 model YoutubeVideo {
-  videoId     String   @id @map("video_id")
-  channelId   String   @map("channel_id")
-  title       String
-  description String?
-  publishedAt DateTime @map("published_at")
-  viewCount   BigInt?  @map("view_count")
-  fetchedAt   DateTime @default(now()) @map("fetched_at")
+  videoId         String   @id @map("video_id")
+  channelId       String   @map("channel_id")
+  title           String
+  description     String?
+  publishedAt     DateTime @map("published_at")
+  viewCount       BigInt?  @map("view_count")
+  durationSeconds Int?     @map("duration_seconds")
+  /// Canonical target title this video is about, if any.
+  canonicalTitle  String?  @map("canonical_title")
+  fetchedAt       DateTime @default(now()) @map("fetched_at")
 
   channel YoutubeChannel @relation(fields: [channelId], references: [channelId], onDelete: Cascade)
 
   @@index([channelId, publishedAt])
   @@map("youtube_videos")
+}
+
+/// Daily snapshot per tracked channel, so YouTube trajectory can be read later.
+model YoutubeChannelDaily {
+  channelId       String   @map("channel_id")
+  date            DateTime @db.Date
+  subscriberCount BigInt?  @map("subscriber_count")
+  medianViews     Int?     @map("median_views")
+  uploads30d      Int?     @map("uploads_30d")
+
+  channel YoutubeChannel @relation(fields: [channelId], references: [channelId], onDelete: Cascade)
+
+  @@id([channelId, date])
+  @@map("youtube_channel_daily")
+}
+
+/// YouTube API units spent per quota day (quota resets at midnight Pacific).
+model YoutubeUsage {
+  date  DateTime @id @db.Date
+  units Int      @default(0)
+
+  @@map("youtube_usage")
 }
 
 /// Recomputed nightly; history kept so rank movement can be shown.
@@ -178,8 +226,25 @@ model Competitor {
 
   ads      CompetitorAd[]
   mentions SponsorMention[]
+  codes    PromoCode[]
 
   @@map("competitors")
+}
+
+/// Promo codes per competitor. Codes found in the wild are searched for in
+/// turn (oldest-searched first), which surfaces more of the creator network.
+model PromoCode {
+  id             Int       @id @default(autoincrement())
+  competitorId   Int       @map("competitor_id")
+  code           String
+  source         String
+  firstSeenAt    DateTime  @default(now()) @map("first_seen_at")
+  lastSearchedAt DateTime? @map("last_searched_at")
+
+  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@unique([competitorId, code])
+  @@map("promo_codes")
 }
 
 model CompetitorAd {
@@ -208,12 +273,14 @@ model SponsorMention {
   competitorId      Int      @map("competitor_id")
   platform          String
   creatorId         Int?     @map("creator_id")
-  externalChannelId String   @map("external_channel_id")
+  externalChannelId String    @map("external_channel_id")
+  channelTitle      String?   @map("channel_title")
   url               String
   title             String?
-  viewCount         BigInt?  @map("view_count")
-  promoCode         String?  @map("promo_code")
-  observedAt        DateTime @default(now()) @map("observed_at")
+  viewCount         BigInt?   @map("view_count")
+  promoCode         String?   @map("promo_code")
+  publishedAt       DateTime? @map("published_at")
+  observedAt        DateTime  @default(now()) @map("observed_at")
 
   competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
   creator    Creator?   @relation(fields: [creatorId], references: [id], onDelete: SetNull)

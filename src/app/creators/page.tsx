@@ -20,7 +20,7 @@ export default async function Creators({ searchParams }: { searchParams: Search 
 
   return (
     <>
-      <h1>Creators</h1>
+      <h1>Twitch creators</h1>
       <p className="sub">
         Everyone the poller has seen on a target title, most recently seen first. Stream counts and average
         viewers cover the last 7 days on target titles only.

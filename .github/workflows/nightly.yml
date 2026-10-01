@@ -1,7 +1,11 @@
 name: Nightly
 
-# 08:15 UTC: after midnight Pacific, when the YouTube quota resets (used by
-# enrichment jobs added later). Disabled until POLLER_ENABLED is "true".
+# 08:15 UTC is after midnight Pacific (PDT and PST), when the YouTube quota
+# resets. Disabled until POLLER_ENABLED is "true".
+#   1. apply any pending database migrations
+#   2. roll up yesterday's Twitch observations, enforce retention
+#   3. Twitch profiles, Twitch title scan, YouTube links / promo search /
+#      discovery / vetting / refresh (each capped to its quota share)
 on:
   schedule:
     - cron: "15 8 * * *"
@@ -15,9 +19,13 @@ jobs:
   nightly:
     if: ${{ vars.POLLER_ENABLED == 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+      TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
       POLL_INTERVAL_MINUTES: "20"
     steps:
       - uses: actions/checkout@v5
@@ -26,4 +34,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run db:deploy
       - run: npm run rollup
+      - run: npm run daily
