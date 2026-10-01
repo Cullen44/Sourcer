@@ -1,0 +1,24 @@
+name: YouTube check
+
+# Manual: verifies YOUTUBE_API_KEY works and previews a promo-code search.
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: Search query to preview
+        default: '"Kalshi" promo code'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+      CHECK_QUERY: ${{ inputs.query }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/youtube-check.ts
