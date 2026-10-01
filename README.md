@@ -58,14 +58,16 @@ A read-only browser for what's been collected: poller health, creators (search, 
    ```
 4. Run:
    ```sh
-   npm install
+   npm ci
    npm run dev
    ```
 5. Open http://localhost:3000.
 
 `.env` is git-ignored, so the password never gets committed.
 
-To update later: stop the viewer (Ctrl+C), then `git pull`, `npm install`, `npm run dev`. `npm run dev` regenerates the database client on every start, so a pulled schema change can't leave the viewer out of date.
+To update later: stop the viewer (Ctrl+C), then `git pull`, `npm ci`, `npm run dev`. Use `npm ci` rather than `npm install`: it installs exactly what `package-lock.json` lists without rewriting it, so a later `git pull` isn't blocked by local lockfile changes. `npm run dev` regenerates the database client on every start, and clears the `.next` cache when the schema changed, so a pulled schema change can't leave the viewer out of date.
+
+If `git pull` ever says local changes to `package-lock.json` would be overwritten, discard them with `git checkout -- package-lock.json` and pull again.
 
 ## Local development
 
