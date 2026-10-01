@@ -64,7 +64,7 @@ describe.skipIf(!db)("YouTube stages", () => {
   beforeEach(async () => {
     await db!.$executeRawUnsafe(`
       TRUNCATE youtube_usage, youtube_channel_daily, youtube_videos, youtube_channels, promo_codes, sponsor_mentions,
-               creator_daily, stream_observations, poll_runs, creator_scores, creators, games, competitor_ads, competitors
+               creator_daily, stream_observations, poll_runs, creator_scores, creators, games, competitor_ads, ad_collection_runs, competitors
       RESTART IDENTITY CASCADE`);
   });
   afterAll(async () => db?.$disconnect());

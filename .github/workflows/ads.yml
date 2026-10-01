@@ -1,0 +1,37 @@
+name: Meta ads
+
+# Daily: each competitor's active US ads from the public Meta Ad Library.
+# Run manually with "probe" to log the data shape found (field names only).
+# Disabled until POLLER_ENABLED is "true".
+on:
+  schedule:
+    - cron: "37 10 * * *"
+  workflow_dispatch:
+    inputs:
+      probe:
+        description: Log the shape of the data found (field names only)
+        type: boolean
+        default: false
+
+concurrency:
+  group: ads
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    if: ${{ vars.POLLER_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run db:deploy
+      - run: npm run ads -- ${{ inputs.probe && '--probe' || '' }}

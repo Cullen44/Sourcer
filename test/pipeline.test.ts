@@ -35,7 +35,7 @@ const at = (iso: string) => new Date(iso);
 describe.skipIf(!db)("poll + rollup", () => {
   beforeEach(async () => {
     await db!.$executeRawUnsafe(`
-      TRUNCATE creator_daily, stream_observations, poll_runs, creator_scores, sponsor_mentions, promo_codes, youtube_usage, youtube_channel_daily,
+      TRUNCATE creator_daily, stream_observations, poll_runs, creator_scores, sponsor_mentions, promo_codes, youtube_usage, youtube_channel_daily, ad_collection_runs,
                youtube_videos, youtube_channels, creators, games, competitor_ads, competitors
       RESTART IDENTITY CASCADE`);
     await db!.game.create({ data: { twitchGameId: "t8", name: "Tekken 8", canonicalTitle: "Tekken", isTarget: true } });

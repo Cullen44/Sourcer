@@ -22,7 +22,7 @@ export default async function Sponsors({ searchParams }: { searchParams: Search 
       <div className="table-wrap">
         <table>
           <thead>
-            <tr><th>Competitor</th><th>Priority</th><th className="num">Codes</th><th>Domains</th><th>FB page</th><th className="num">Active ads</th><th className="num">Mentions</th></tr>
+            <tr><th>Competitor</th><th>Priority</th><th className="num">Codes</th><th>Domains</th><th>FB pages</th><th className="num">Active ads</th><th className="num">Mentions</th></tr>
           </thead>
           <tbody>
             {competitors.map((c) => (
@@ -31,7 +31,7 @@ export default async function Sponsors({ searchParams }: { searchParams: Search 
                 <td>{c.priority === 1 ? "Direct comp" : <span className="muted">Secondary</span>}</td>
                 <td className="num">{num(c._count.codes)}</td>
                 <td className="muted">{c.domains.join(", ")}</td>
-                <td>{c.fbPageId ? "✓" : <span className="warn">missing</span>}</td>
+                <td>{c.fbPageIds.length ? `${c.fbPageIds.length} page${c.fbPageIds.length > 1 ? "s" : ""}` : <span className="warn">missing</span>}</td>
                 <td className="num">{num(c._count.ads)}</td>
                 <td className="num">{num(c._count.mentions)}</td>
               </tr>

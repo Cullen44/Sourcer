@@ -219,7 +219,8 @@ model CreatorScore {
 model Competitor {
   id         Int      @id @default(autoincrement())
   name       String   @unique
-  fbPageId   String?  @map("fb_page_id")
+  /// Facebook Page IDs whose ads are collected (a brand may run several Pages).
+  fbPageIds  String[] @default([]) @map("fb_page_ids")
   domains    String[]
   knownCodes String[] @map("known_codes")
   priority   Int      @default(2)
@@ -227,6 +228,7 @@ model Competitor {
   ads      CompetitorAd[]
   mentions SponsorMention[]
   codes    PromoCode[]
+  adRuns   AdCollectionRun[]
 
   @@map("competitors")
 }
@@ -247,23 +249,52 @@ model PromoCode {
   @@map("promo_codes")
 }
 
+/// One Meta Ad Library ad. startedAt is when Meta says it began running;
+/// firstObservedAt/lastObservedAt are when the collector saw it; stoppedAt is
+/// the first successful collection that no longer found it active.
 model CompetitorAd {
   id              Int       @id @default(autoincrement())
   competitorId    Int       @map("competitor_id")
   adLibraryId     String    @unique @map("ad_library_id")
+  pageId          String?   @map("page_id")
+  pageName        String?   @map("page_name")
   creativeText    String?   @map("creative_text")
+  headline        String?
+  ctaText         String?   @map("cta_text")
+  landingUrl      String?   @map("landing_url")
   landingDomain   String?   @map("landing_domain")
   promoCode       String?   @map("promo_code")
+  displayFormat   String?   @map("display_format")
   platforms       String[]
   startedAt       DateTime? @map("started_at")
   firstObservedAt DateTime  @default(now()) @map("first_observed_at")
   lastObservedAt  DateTime  @default(now()) @map("last_observed_at")
+  stoppedAt       DateTime? @map("stopped_at")
   isActive        Boolean   @default(true) @map("is_active")
 
   competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
 
   @@index([competitorId, isActive])
   @@map("competitor_ads")
+}
+
+/// One collection attempt for one Facebook Page. Ads are only marked stopped
+/// after an "ok" run, so a blocked or broken scrape never fakes a mass stop.
+model AdCollectionRun {
+  id           Int       @id @default(autoincrement())
+  competitorId Int       @map("competitor_id")
+  pageId       String    @map("page_id")
+  startedAt    DateTime  @default(now()) @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+  /// ok | empty | blocked | error
+  status       String
+  adsFound     Int       @default(0) @map("ads_found")
+  detail       String?
+
+  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@index([competitorId, startedAt])
+  @@map("ad_collection_runs")
 }
 
 /// creatorId is nullable on purpose: most creators found through a promo code
