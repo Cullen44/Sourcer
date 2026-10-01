@@ -7,6 +7,8 @@ import { createDb } from "../src/db";
 // --probe also logs the field names found on ad objects (never ad content;
 // this repo's Actions logs are public), to diagnose format changes.
 const probe = process.argv.includes("--probe");
+// --page=<id> limits the run to one Facebook Page (for diagnosing).
+const onlyPage = process.argv.find((a) => a.startsWith("--page="))?.slice(7);
 const db = createDb();
 const browser = await chromium.launch();
 let okPages = 0;
@@ -15,9 +17,10 @@ try {
   const competitors = await db.competitor.findMany({ include: { codes: true }, orderBy: { priority: "asc" } });
   for (const c of competitors) {
     for (const pageId of c.fbPageIds) {
+      if (onlyPage && pageId !== onlyPage) continue;
       pages++;
       const startedAt = new Date();
-      const result = await collectPage(browser, pageId);
+      const result = await collectPage(browser, pageId, 80, probe ? console.log : undefined);
       const stored = await storeResult(db, { id: c.id, codes: c.codes.map((x) => x.code) }, pageId, result, startedAt);
       if (result.status === "ok" || result.status === "empty") okPages++;
       console.log(

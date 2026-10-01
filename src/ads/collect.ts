@@ -47,12 +47,16 @@ export function isComplete(ads: ParsedAd[], reported: number | null): boolean {
  * count is reached or no new ads arrive. Reads the JSON behind the page
  * (initial HTML plus GraphQL responses), not the rendered layout.
  */
-export async function collectPage(browser: Browser, pageId: string, maxScrolls = 80): Promise<PageResult> {
+export async function collectPage(browser: Browser, pageId: string, maxScrolls = 80, debug?: (msg: string) => void): Promise<PageResult> {
   const ctx = await browser.newContext({ userAgent: UA, locale: "en-US", timezoneId: "America/New_York", viewport: { width: 1366, height: 900 } });
   const page = await ctx.newPage();
   const bodies: string[] = [];
+  const queryNames: string[] = [];
   page.on("response", async (r) => {
     if (r.url().includes("/api/graphql")) {
+      // Request names (not content) help diagnose which query paginates.
+      const name = /fb_api_req_friendly_name=([^&]+)/.exec(r.request().postData() ?? "")?.[1];
+      if (name) queryNames.push(decodeURIComponent(name));
       try {
         bodies.push(await r.text());
       } catch {
@@ -78,16 +82,31 @@ export async function collectPage(browser: Browser, pageId: string, maxScrolls =
     const current = async () => parseAds([await page.content(), ...bodies]).filter((a) => !a.pageId || a.pageId === pageId);
 
     let ads = await current();
+    const html0 = await page.content();
+    debug?.(`  initial: ${ads.length} ads; queries at load: ${[...new Set(queryNames)].join(", ") || "none"}; ` +
+      `html has end_cursor: ${html0.includes("end_cursor")}, has_next_page:true: ${/"has_next_page":true/.test(html0)}`);
+
     let still = 0;
     let scrolls = 0;
     while (scrolls < maxScrolls && still < 4 && !(reported !== null && isComplete(ads, reported))) {
       scrolls++;
-      const next = page.waitForResponse((r) => r.url().includes("/api/graphql"), { timeout: 8_000 }).catch(() => null);
-      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-      await page.mouse.wheel(0, 2_000);
+      const before = queryNames.length;
+      const next = page.waitForResponse((r) => r.url().includes("/api/graphql"), { timeout: 10_000 }).catch(() => null);
+      // Several ways to reach the bottom; the Ad Library's infinite scroll
+      // has ignored a plain wheel event.
+      const pos = await page.evaluate(() => {
+        const cards = [...document.querySelectorAll("div")].filter((d) => /Library ID/.test(d.textContent ?? "") && d.children.length < 30);
+        cards.at(-1)?.scrollIntoView({ block: "end" });
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        return { y: Math.round(window.scrollY), h: document.documentElement.scrollHeight };
+      });
+      await page.keyboard.press("End").catch(() => {});
+      await page.mouse.move(683, 700);
+      await page.mouse.wheel(0, 3_000);
       await next;
-      await page.waitForTimeout(1_500);
+      await page.waitForTimeout(2_000);
       const n = await current();
+      if (scrolls <= 3) debug?.(`  scroll ${scrolls}: y=${pos.y}/${pos.h}, new queries: ${queryNames.slice(before).join(", ") || "none"}, ads ${n.length}`);
       still = n.length === ads.length ? still + 1 : 0;
       ads = n;
     }

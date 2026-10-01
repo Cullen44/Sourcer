@@ -12,6 +12,9 @@ on:
         description: Log the shape of the data found (field names only)
         type: boolean
         default: false
+      page:
+        description: Only this Facebook Page ID (optional)
+        default: ""
 
 concurrency:
   group: ads
@@ -34,4 +37,4 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run db:deploy
-      - run: npm run ads -- ${{ inputs.probe && '--probe' || '' }}
+      - run: npm run ads -- ${{ inputs.probe && '--probe' || '' }} ${{ inputs.page && format('--page={0}', inputs.page) || '' }}
