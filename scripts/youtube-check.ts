@@ -1,4 +1,4 @@
-import { YouTubeClient } from "../src/youtube/client.js";
+import { YouTubeClient } from "../src/youtube/client";
 
 // Smoke test for the YouTube key: one cheap channel lookup, then one real
 // promo-code search as a preview of the sponsor watch. Costs ~102 units.

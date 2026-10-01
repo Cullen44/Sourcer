@@ -12,11 +12,11 @@ The pipeline does deterministic work only (fetch, store, aggregate, score). Judg
 | Phase | What | State |
 |---|---|---|
 | 0 | Schema, migrations, CI | Done |
-| 1 | Twitch poller + nightly rollup/retention | Done, waiting on credentials |
+| 1 | Twitch poller + nightly rollup/retention | Live |
 | 2 | Sponsor watch: Meta Ad Library, promo-code lookup, weekly diff | Next |
 | 3 | Twitch user + YouTube enrichment | |
 | 4 | Scoring + CSV/Markdown export | Needs ~1 week of data |
-| 5 | Optional UI | |
+| 5 | Local viewer (browse only, no rankings) | Done |
 
 ## How it runs
 
@@ -38,6 +38,30 @@ Scheduled workflows stay off until the repo variable `POLLER_ENABLED` is `true`.
 4. Make sure this branch's workflows are on the **default branch**. GitHub only fires scheduled workflows from there.
 5. Actions → **Set up database** → Run workflow. Check its log: each canonical title should list its matched Twitch categories.
 6. Actions → **Poll Twitch** → Run workflow once to confirm, then leave the schedule running.
+
+## Viewing the data locally
+
+A read-only browser for what's been collected: poller health, creators (search, filter by title and language) with their recent streams, and sponsor mentions. It shows facts, not rankings.
+
+1. Install Node.js 22 from nodejs.org.
+2. Clone the repo and switch to the working branch:
+   ```sh
+   git clone https://github.com/Cullen44/Sourcer
+   cd Sourcer
+   git checkout claude/brave-heisenberg-0ktvvq
+   ```
+3. Create a file named `.env` in the `Sourcer` folder with one line, using the same Supabase transaction-pooler string as the `DATABASE_URL` GitHub secret:
+   ```
+   DATABASE_URL="postgresql://...:6543/postgres?pgbouncer=true"
+   ```
+4. Run:
+   ```sh
+   npm install
+   npm run dev
+   ```
+5. Open http://localhost:3000.
+
+`.env` is git-ignored, so the password never gets committed.
 
 ## Local development
 

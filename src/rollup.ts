@@ -1,4 +1,4 @@
-import type { Db } from "./db.js";
+import type { Db } from "./db";
 
 export interface RollupOptions {
   /** Expected minutes between sweeps; credit for the latest sweep and the cap on gaps. */

@@ -1,8 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { createDb } from "../src/db.js";
-import { runPoll } from "../src/poll.js";
-import { runRollup } from "../src/rollup.js";
-import type { HelixStream, TwitchClient } from "../src/twitch/client.js";
+import { createDb } from "../src/db";
+import { runPoll } from "../src/poll";
+import { runRollup } from "../src/rollup";
+import type { HelixStream, TwitchClient } from "../src/twitch/client";
 
 // Runs against a real Postgres with migrations applied. Skipped when
 // TEST_DATABASE_URL is not set. The database is wiped between tests.

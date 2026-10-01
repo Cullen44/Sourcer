@@ -1,6 +1,6 @@
-import { TARGET_TITLES } from "../src/config/games.js";
-import { createDb } from "../src/db.js";
-import { TwitchClient } from "../src/twitch/client.js";
+import { TARGET_TITLES } from "../src/config/games";
+import { createDb } from "../src/db";
+import { TwitchClient } from "../src/twitch/client";
 
 // Resolve the target titles to Twitch category IDs. Re-run after a new yearly
 // release (CoD, EA FC, 2K, Madden). `--dry-run` prints matches without writing.

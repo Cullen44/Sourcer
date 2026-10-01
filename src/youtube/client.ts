@@ -1,5 +1,5 @@
-import { requireEnv } from "../env.js";
-import type { FetchLike } from "../twitch/client.js";
+import { requireEnv } from "../env";
+import type { FetchLike } from "../twitch/client";
 
 const API = "https://www.googleapis.com/youtube/v3";
 

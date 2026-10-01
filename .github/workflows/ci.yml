@@ -30,3 +30,4 @@ jobs:
       - run: npm run typecheck
       - run: npx prisma migrate deploy
       - run: npm test
+      - run: npm run build

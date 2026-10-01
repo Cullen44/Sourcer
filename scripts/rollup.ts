@@ -1,6 +1,6 @@
-import { createDb } from "../src/db.js";
-import { intEnv } from "../src/env.js";
-import { runRollup } from "../src/rollup.js";
+import { createDb } from "../src/db";
+import { intEnv } from "../src/env";
+import { runRollup } from "../src/rollup";
 
 const db = createDb();
 try {

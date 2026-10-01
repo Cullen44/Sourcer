@@ -1,5 +1,5 @@
-import { COMPETITORS } from "../src/config/competitors.js";
-import { createDb } from "../src/db.js";
+import { COMPETITORS } from "../src/config/competitors";
+import { createDb } from "../src/db";
 
 // Upsert the watch list. Never clears a page ID or code already in the
 // database; codes discovered later by the pipeline are kept.

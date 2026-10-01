@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TwitchClient, type FetchLike, type HelixStream } from "../src/twitch/client.js";
+import { TwitchClient, type FetchLike, type HelixStream } from "../src/twitch/client";
 
 function stream(id: string, viewers: number): HelixStream {
   return {

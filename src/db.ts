@@ -1,6 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "./generated/prisma/client.js";
-import { requireEnv } from "./env.js";
+import { PrismaClient } from "./generated/prisma/client";
+import { requireEnv } from "./env";
 
 export type Db = PrismaClient;
 

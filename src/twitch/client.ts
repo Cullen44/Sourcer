@@ -1,4 +1,4 @@
-import { requireEnv } from "../env.js";
+import { requireEnv } from "../env";
 
 const HELIX = "https://api.twitch.tv/helix";
 const TOKEN_URL = "https://id.twitch.tv/oauth2/token";

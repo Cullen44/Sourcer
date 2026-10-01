@@ -7,3 +7,4 @@ src/generated/
 exports/
 .next/
 *.log
+*.tsbuildinfo

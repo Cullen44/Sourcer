@@ -1,7 +1,7 @@
-import { createDb } from "../src/db.js";
-import { intEnv } from "../src/env.js";
-import { runPoll } from "../src/poll.js";
-import { TwitchClient } from "../src/twitch/client.js";
+import { createDb } from "../src/db";
+import { intEnv } from "../src/env";
+import { runPoll } from "../src/poll";
+import { TwitchClient } from "../src/twitch/client";
 
 const db = createDb();
 try {

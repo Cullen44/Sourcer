@@ -1,5 +1,5 @@
-import type { Db } from "./db.js";
-import type { HelixStream, TwitchClient } from "./twitch/client.js";
+import type { Db } from "./db";
+import type { HelixStream, TwitchClient } from "./twitch/client";
 
 export interface PollOptions {
   /** Minimum concurrent viewers for a stream to enter via the per-game sweep. */
