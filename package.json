@@ -6,6 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "predev": "prisma generate",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
