@@ -88,28 +88,33 @@ export async function collectPage(browser: Browser, pageId: string, maxScrolls =
     debug?.(`  initial: ${ads.length} ads; queries at load: ${[...new Set(queryNames)].join(", ") || "none"}; ` +
       `html has end_cursor: ${html0.includes("end_cursor")}, has_next_page:true: ${/"has_next_page":true/.test(html0)}`);
 
+    // Pagination is rate-limited for logged-out visitors, so go gently: one
+    // scroll at a time, wait for its response, and back off when limited.
     let still = 0;
     let scrolls = 0;
-    while (scrolls < maxScrolls && still < 4 && !(reported !== null && isComplete(ads, reported))) {
+    let limited = 0;
+    while (scrolls < maxScrolls && still < 3 && limited < 3 && !(reported !== null && isComplete(ads, reported))) {
       scrolls++;
-      const before = queryNames.length;
-      const next = page.waitForResponse((r) => r.url().includes("/api/graphql"), { timeout: 10_000 }).catch(() => null);
-      // Several ways to reach the bottom; the Ad Library's infinite scroll
-      // has ignored a plain wheel event.
-      const pos = await page.evaluate(() => {
-        const cards = [...document.querySelectorAll("div")].filter((d) => /Library ID/.test(d.textContent ?? "") && d.children.length < 30);
-        cards.at(-1)?.scrollIntoView({ block: "end" });
-        window.scrollTo(0, document.documentElement.scrollHeight);
-        return { y: Math.round(window.scrollY), h: document.documentElement.scrollHeight };
-      });
-      await page.keyboard.press("End").catch(() => {});
-      await page.mouse.move(683, 700);
-      await page.mouse.wheel(0, 3_000);
-      await next;
-      await page.waitForTimeout(2_000);
+      const next = page
+        .waitForResponse((r) => r.url().includes("/api/graphql") && /Pagination/.test(r.request().postData() ?? ""), { timeout: 15_000 })
+        .then((r) => r.text())
+        .catch(() => null);
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      const body = await next;
+      if (body && /Rate limit exceeded/i.test(body)) {
+        limited++;
+        debug?.(`  scroll ${scrolls}: rate limited, backing off 45s (${limited}/3)`);
+        await page.waitForTimeout(45_000);
+        // Nudge up and down so the page re-requests the same page of results.
+        await page.evaluate(() => window.scrollBy(0, -1500));
+        await page.waitForTimeout(1_000);
+        continue;
+      }
+      await page.waitForTimeout(4_000 + Math.random() * 3_000);
       const n = await current();
-      if (scrolls <= 3) debug?.(`  scroll ${scrolls}: y=${pos.y}/${pos.h}, new queries: ${queryNames.slice(before).join(", ") || "none"}, ads ${n.length}`);
+      debug?.(`  scroll ${scrolls}: ${body ? "page loaded" : "no pagination response"}, ads ${n.length}`);
       still = n.length === ads.length ? still + 1 : 0;
+      if (n.length > ads.length) limited = 0;
       ads = n;
     }
 
@@ -117,7 +122,7 @@ export async function collectPage(browser: Browser, pageId: string, maxScrolls =
     const shape = describeShape([html, ...bodies]);
     const url = page.url();
     const complete = isComplete(ads, reported);
-    const detail = `reported ${reported ?? "?"}, collected ${ads.length} (${ads.reduce((n, a) => n + a.collationCount, 0)} incl. grouped), ${scrolls} scrolls, ${bodies.length} graphql responses`;
+    const detail = `reported ${reported ?? "?"}, collected ${ads.length} (${ads.reduce((n, a) => n + a.collationCount, 0)} incl. grouped), ${scrolls} scrolls${limited ? `, rate-limited ${limited}x` : ""}`;
 
     if (/\/login|\/checkpoint/.test(url) || (ads.length === 0 && /login_form|You must log in|Log into Facebook/i.test(html))) {
       return { status: "blocked", ads: [], complete: false, detail: `login wall (${url.slice(0, 80)})`, shape };
