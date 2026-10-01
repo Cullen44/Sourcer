@@ -14,7 +14,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ channe
 
   return (
     <>
-      <p className="sub"><Link href="/youtube">← YouTube</Link></p>
+      <p className="sub"><Link href="/creators?platform=youtube">← Creators</Link> · <Link href="/youtube">Discovery</Link></p>
       <h1>{c.title ?? c.channelId}</h1>
       <p className="sub">
         <a href={`https://www.youtube.com/channel/${c.channelId}`} target="_blank" rel="noreferrer">

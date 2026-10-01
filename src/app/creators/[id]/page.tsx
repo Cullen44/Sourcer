@@ -13,7 +13,7 @@ export default async function CreatorPage({ params }: { params: Promise<{ id: st
 
   return (
     <>
-      <p className="sub"><Link href="/creators">← Twitch creators</Link></p>
+      <p className="sub"><Link href="/creators">← Creators</Link></p>
       <h1>{c.displayName}</h1>
       <p className="sub">
         <a href={`https://twitch.tv/${c.login}`} target="_blank" rel="noreferrer">twitch.tv/{c.login}</a>

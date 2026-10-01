@@ -73,3 +73,11 @@ form.filters button { background: var(--accent); color: #fff; border-color: var(
 .tabs a { padding: 8px 12px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .tabs a.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
 .tabs a:hover { text-decoration: none; color: var(--text); }
+.badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 4px; margin-right: 4px; }
+.badge:hover { text-decoration: none; opacity: .85; }
+.badge.twitch { background: #9146ff22; color: #7c3aed; }
+.badge.youtube { background: #ff000018; color: #dc2626; }
+@media (prefers-color-scheme: dark) {
+  .badge.twitch { background: #9146ff33; color: #c4b5fd; }
+  .badge.youtube { background: #ff000030; color: #fca5a5; }
+}

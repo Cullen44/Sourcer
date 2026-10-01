@@ -33,58 +33,91 @@ export async function getOverview() {
   return { lastRun, lastOk, runs24h, failed24h, creators, newCreators24h, observations, competitors, mentions, byTitle };
 }
 
+export type Platform = "all" | "twitch" | "youtube";
+
+/**
+ * One row per creator across platforms. A Twitch creator with a tracked
+ * YouTube channel is a single "twitch" row carrying both sets of figures;
+ * YouTube channels not linked to a Twitch creator are their own rows.
+ */
 export interface CreatorRow {
-  id: number;
-  login: string;
-  display_name: string;
-  broadcaster_type: string | null;
-  first_seen_at: Date;
-  last_seen_at: Date;
+  platform: "twitch" | "youtube";
+  key: string;
+  twitch_id: number | null;
+  twitch_name: string | null;
+  name: string;
   titles: string[] | null;
   language: string | null;
-  streams: number;
+  broadcaster_type: string | null;
+  streams: number | null;
   avg_viewers: number | null;
-  has_youtube: boolean;
+  yt_channel_id: string | null;
+  yt_median_views: number | null;
+  yt_uploads_30d: number | null;
+  last_active: Date | null;
 }
 
 export interface CreatorFilters {
   q: string;
   title: string;
   lang: string;
+  platform: Platform;
   page: number;
 }
 
 export const PAGE_SIZE = 50;
 
 export async function listCreators(f: CreatorFilters) {
-  const where = `
-    WHERE ($1 = '' OR c.login ILIKE '%' || $1 || '%' OR c.display_name ILIKE '%' || $1 || '%')
-      AND ($2 = '' OR $2 = ANY(s.titles))
-      AND ($3 = '' OR s.language = $3)`;
-  const stats = `
-    LEFT JOIN LATERAL (
-      SELECT ARRAY_AGG(DISTINCT g.canonical_title) FILTER (WHERE g.is_target) AS titles,
-             MODE() WITHIN GROUP (ORDER BY o.language) AS language,
-             COUNT(DISTINCT o.stream_id) FILTER (WHERE g.is_target)::int AS streams,
-             ROUND(AVG(o.viewer_count) FILTER (WHERE g.is_target))::int AS avg_viewers
-      FROM stream_observations o
-      JOIN games g ON g.id = o.game_id
-      WHERE o.creator_id = c.id
-    ) s ON true`;
-  const args = [f.q.trim(), f.title, f.lang];
+  // $1 q, $2 title, $3 lang, $4 platform
+  const union = `
+    WITH tw AS (
+      SELECT 'twitch'::text AS platform, c.id::text AS key, c.id AS twitch_id, c.display_name AS twitch_name,
+             c.display_name AS name,
+             COALESCE(s.titles, '{}') || CASE WHEN y.primary_title IS NULL THEN '{}'::text[] ELSE ARRAY[y.primary_title] END AS titles,
+             s.language, c.broadcaster_type, COALESCE(s.streams, 0) AS streams, s.avg_viewers,
+             y.channel_id AS yt_channel_id, y.median_views AS yt_median_views, y.uploads_30d AS yt_uploads_30d,
+             GREATEST(c.last_seen_at, y.last_upload_at) AS last_active,
+             c.login AS search_a, y.title AS search_b
+      FROM creators c
+      LEFT JOIN LATERAL (
+        SELECT ARRAY_AGG(DISTINCT g.canonical_title) FILTER (WHERE g.is_target) AS titles,
+               MODE() WITHIN GROUP (ORDER BY o.language) AS language,
+               COUNT(DISTINCT o.stream_id) FILTER (WHERE g.is_target)::int AS streams,
+               ROUND(AVG(o.viewer_count) FILTER (WHERE g.is_target))::int AS avg_viewers
+        FROM stream_observations o JOIN games g ON g.id = o.game_id
+        WHERE o.creator_id = c.id
+      ) s ON true
+      LEFT JOIN LATERAL (
+        SELECT * FROM youtube_channels y WHERE y.creator_id = c.id AND y.status = 'tracked' ORDER BY y.id LIMIT 1
+      ) y ON true
+    ),
+    yt AS (
+      SELECT 'youtube'::text, y.channel_id, y.creator_id, c.display_name, COALESCE(y.title, y.channel_id),
+             CASE WHEN y.primary_title IS NULL THEN '{}'::text[] ELSE ARRAY[y.primary_title] END,
+             NULL::text, NULL::text, NULL::int, NULL::int,
+             y.channel_id, y.median_views, y.uploads_30d, y.last_upload_at,
+             y.handle, NULL::text
+      FROM youtube_channels y LEFT JOIN creators c ON c.id = y.creator_id
+      WHERE y.status = 'tracked' AND ($4 = 'youtube' OR y.creator_id IS NULL)
+    ),
+    u AS (
+      SELECT * FROM tw WHERE $4 IN ('all', 'twitch')
+      UNION ALL
+      SELECT * FROM yt WHERE $4 IN ('all', 'youtube')
+    )
+    SELECT * FROM u
+    WHERE ($1 = '' OR name ILIKE '%' || $1 || '%' OR search_a ILIKE '%' || $1 || '%' OR search_b ILIKE '%' || $1 || '%')
+      AND ($2 = '' OR $2 = ANY(titles))
+      AND ($3 = '' OR language = $3)`;
+  const args = [f.q.trim(), f.title, f.lang, f.platform];
 
   const [rows, total] = await Promise.all([
     db.$queryRawUnsafe<CreatorRow[]>(
-      `SELECT c.id, c.login, c.display_name, c.broadcaster_type, c.first_seen_at, c.last_seen_at,
-              s.titles, s.language, COALESCE(s.streams, 0) AS streams, s.avg_viewers,
-              EXISTS (SELECT 1 FROM youtube_channels y WHERE y.creator_id = c.id) AS has_youtube
-       FROM creators c ${stats} ${where}
-       ORDER BY c.last_seen_at DESC, c.id
-       LIMIT ${PAGE_SIZE} OFFSET $4`,
+      `${union} ORDER BY last_active DESC NULLS LAST, key LIMIT ${PAGE_SIZE} OFFSET $5`,
       ...args,
       (f.page - 1) * PAGE_SIZE,
     ),
-    db.$queryRawUnsafe<{ n: number }[]>(`SELECT COUNT(*)::int AS n FROM creators c ${stats} ${where}`, ...args),
+    db.$queryRawUnsafe<{ n: number }[]>(`SELECT COUNT(*)::int AS n FROM (${union}) x`, ...args),
   ]);
   return { rows, total: total[0]?.n ?? 0 };
 }

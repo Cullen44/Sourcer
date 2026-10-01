@@ -13,8 +13,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="brand">Sourcer</Link>
             <nav>
               <Link href="/">Overview</Link>
-              <Link href="/creators">Twitch</Link>
-              <Link href="/youtube">YouTube</Link>
+              <Link href="/creators">Creators</Link>
+              <Link href="/youtube">Discovery</Link>
               <Link href="/sponsors">Sponsors</Link>
             </nav>
           </div>

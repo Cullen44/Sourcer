@@ -24,7 +24,7 @@ export default async function YouTube({ searchParams }: { searchParams: Search }
 
   return (
     <>
-      <h1>YouTube channels</h1>
+      <h1>YouTube discovery</h1>
       <p className="sub">
         Channels found by title searches must pass every filter to be tracked: at least {DISCOVERY.minTitleShare * 100}% of
         recent uploads on target titles, {DISCOVERY.minUploads30d}+ uploads in 30 days, and median views between{" "}

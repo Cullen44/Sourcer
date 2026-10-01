@@ -72,7 +72,7 @@ export default async function Overview() {
                 <tr key={t.title}>
                   <td>{t.title}</td>
                   <td className="num">{num(t.streams)}</td>
-                  <td><Link href={`/creators?title=${encodeURIComponent(t.title)}`}>Browse creators →</Link></td>
+                  <td><Link href={`/creators?platform=twitch&title=${encodeURIComponent(t.title)}`}>Browse creators →</Link></td>
                 </tr>
               ))}
             </tbody>
