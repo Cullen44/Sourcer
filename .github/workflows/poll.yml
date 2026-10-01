@@ -1,0 +1,32 @@
+name: Poll Twitch
+
+# Scheduled runs only fire on the default branch and can start late or be
+# skipped under load; the rollup credits airtime from real gaps between runs.
+# Disabled until the repo variable POLLER_ENABLED is set to "true".
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: poll
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    if: ${{ vars.POLLER_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+      TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+      VIEWER_FLOOR: ${{ vars.VIEWER_FLOOR || '20' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run poll

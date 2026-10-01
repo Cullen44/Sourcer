@@ -1,0 +1,29 @@
+name: Nightly
+
+# 08:15 UTC: after midnight Pacific, when the YouTube quota resets (used by
+# enrichment jobs added later). Disabled until POLLER_ENABLED is "true".
+on:
+  schedule:
+    - cron: "15 8 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  nightly:
+    if: ${{ vars.POLLER_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      POLL_INTERVAL_MINUTES: "20"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run rollup

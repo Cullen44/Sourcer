@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Sourcing
+// ---------------------------------------------------------------------------
+
+/// Twitch categories. Target titles carry a canonicalTitle so yearly entries
+/// (Call of Duty, EA FC, 2K, Madden) count as one logical title. Non-target
+/// games are recorded too, from tracked creators' off-target streams, so that
+/// relevance (share of streaming on target titles) can be computed.
+model Game {
+  id             Int      @id @default(autoincrement())
+  twitchGameId   String   @unique @map("twitch_game_id")
+  name           String
+  canonicalTitle String?  @map("canonical_title")
+  isTarget       Boolean  @default(false) @map("is_target")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  observations StreamObservation[]
+  daily        CreatorDaily[]
+
+  @@map("games")
+}
+
+model Creator {
+  id               Int       @id @default(autoincrement())
+  twitchUserId     String    @unique @map("twitch_user_id")
+  login            String
+  displayName      String    @map("display_name")
+  description      String?
+  broadcasterType  String?   @map("broadcaster_type")
+  profileImageUrl  String?   @map("profile_image_url")
+  totalViews       BigInt?   @map("total_views")
+  youtubeChannelId String?   @map("youtube_channel_id")
+  firstSeenAt      DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt       DateTime  @default(now()) @map("last_seen_at")
+  enrichedAt       DateTime? @map("enriched_at")
+
+  observations     StreamObservation[]
+  daily            CreatorDaily[]
+  youtubeChannels  YoutubeChannel[]
+  scores           CreatorScore[]
+  sponsorMentions  SponsorMention[]
+
+  @@index([lastSeenAt])
+  @@map("creators")
+}
+
+/// One row per poller sweep. Observations reference their sweep so the rollup
+/// can credit airtime from the real gap between sweeps (scheduled runs drift).
+model PollRun {
+  id          Int       @id @default(autoincrement())
+  startedAt   DateTime  @default(now()) @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  streamsSeen Int       @default(0) @map("streams_seen")
+  requests    Int       @default(0)
+  error       String?
+
+  observations StreamObservation[]
+
+  @@index([startedAt])
+  @@map("poll_runs")
+}
+
+/// Raw poll results. Retained for 7 days, then rolled up and deleted.
+model StreamObservation {
+  id          BigInt   @id @default(autoincrement())
+  pollRunId   Int      @map("poll_run_id")
+  creatorId   Int      @map("creator_id")
+  gameId      Int      @map("game_id")
+  streamId    String   @map("stream_id")
+  viewerCount Int      @map("viewer_count")
+  title       String
+  language    String
+  startedAt   DateTime @map("started_at")
+  observedAt  DateTime @map("observed_at")
+
+  pollRun PollRun @relation(fields: [pollRunId], references: [id], onDelete: Cascade)
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  game    Game    @relation(fields: [gameId], references: [id])
+
+  @@unique([pollRunId, streamId])
+  @@index([observedAt])
+  @@index([creatorId, observedAt])
+  @@map("stream_observations")
+}
+
+/// Rolled-up aggregates per creator, per game, per UTC day. Kept forever.
+model CreatorDaily {
+  creatorId     Int      @map("creator_id")
+  gameId        Int      @map("game_id")
+  date          DateTime @db.Date
+  avgCcv        Float    @map("avg_ccv")
+  peakCcv       Int      @map("peak_ccv")
+  hoursStreamed Float    @map("hours_streamed")
+  sessions      Int
+  lastTitle     String?  @map("last_title")
+  language      String?
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  game    Game    @relation(fields: [gameId], references: [id])
+
+  @@id([creatorId, gameId, date])
+  @@index([date])
+  @@map("creator_daily")
+}
+
+model YoutubeChannel {
+  id                Int      @id @default(autoincrement())
+  creatorId         Int?     @map("creator_id")
+  channelId         String   @unique @map("channel_id")
+  title             String?
+  subscriberCount   BigInt?  @map("subscriber_count")
+  totalViews        BigInt?  @map("total_views")
+  videoCount        Int?     @map("video_count")
+  uploadsPlaylistId String?  @map("uploads_playlist_id")
+  matchMethod       String?  @map("match_method")
+  fetchedAt         DateTime @default(now()) @map("fetched_at")
+
+  creator Creator?       @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  videos  YoutubeVideo[]
+
+  @@map("youtube_channels")
+}
+
+model YoutubeVideo {
+  videoId     String   @id @map("video_id")
+  channelId   String   @map("channel_id")
+  title       String
+  description String?
+  publishedAt DateTime @map("published_at")
+  viewCount   BigInt?  @map("view_count")
+  fetchedAt   DateTime @default(now()) @map("fetched_at")
+
+  channel YoutubeChannel @relation(fields: [channelId], references: [channelId], onDelete: Cascade)
+
+  @@index([channelId, publishedAt])
+  @@map("youtube_videos")
+}
+
+/// Recomputed nightly; history kept so rank movement can be shown.
+model CreatorScore {
+  id             Int      @id @default(autoincrement())
+  creatorId      Int      @map("creator_id")
+  computedAt     DateTime @default(now()) @map("computed_at")
+  relevance      Float
+  trajectory     Float
+  consistency    Float
+  scale          Float
+  sponsorDensity Float    @map("sponsor_density")
+  total          Float
+  reasons        Json?
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([computedAt, total])
+  @@map("creator_scores")
+}
+
+// ---------------------------------------------------------------------------
+// Sponsor watch
+// ---------------------------------------------------------------------------
+
+model Competitor {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique
+  fbPageId   String?  @map("fb_page_id")
+  domains    String[]
+  knownCodes String[] @map("known_codes")
+  priority   Int      @default(2)
+
+  ads      CompetitorAd[]
+  mentions SponsorMention[]
+
+  @@map("competitors")
+}
+
+model CompetitorAd {
+  id              Int       @id @default(autoincrement())
+  competitorId    Int       @map("competitor_id")
+  adLibraryId     String    @unique @map("ad_library_id")
+  creativeText    String?   @map("creative_text")
+  landingDomain   String?   @map("landing_domain")
+  promoCode       String?   @map("promo_code")
+  platforms       String[]
+  startedAt       DateTime? @map("started_at")
+  firstObservedAt DateTime  @default(now()) @map("first_observed_at")
+  lastObservedAt  DateTime  @default(now()) @map("last_observed_at")
+  isActive        Boolean   @default(true) @map("is_active")
+
+  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@index([competitorId, isActive])
+  @@map("competitor_ads")
+}
+
+/// creatorId is nullable on purpose: most creators found through a promo code
+/// are not in `creators` yet. Backfilled when the sourcing pipeline finds them.
+model SponsorMention {
+  id                Int      @id @default(autoincrement())
+  competitorId      Int      @map("competitor_id")
+  platform          String
+  creatorId         Int?     @map("creator_id")
+  externalChannelId String   @map("external_channel_id")
+  url               String
+  title             String?
+  viewCount         BigInt?  @map("view_count")
+  promoCode         String?  @map("promo_code")
+  observedAt        DateTime @default(now()) @map("observed_at")
+
+  competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  creator    Creator?   @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+
+  @@unique([competitorId, url])
+  @@index([externalChannelId])
+  @@map("sponsor_mentions")
+}
