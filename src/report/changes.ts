@@ -35,7 +35,9 @@ export async function getChanges(db: Db, days = 7, now = new Date()) {
     const known = new Set(domainsBefore.map((d) => d.landingDomain));
     const newDomains = [...new Set(newAds.map((a) => a.landingDomain).filter((d): d is string => !!d && !known.has(d)))];
 
-    out.push({ competitor: c, active, newAds, stoppedAds, newCodes, newCreators: [...newCreators.values()], newDomains, lastRuns });
+    const reported = lastRuns.some((r) => r.reportedCount !== null) ? lastRuns.reduce((n, r) => n + (r.reportedCount ?? 0), 0) : null;
+    const complete = lastRuns.length > 0 && lastRuns.every((r) => r.complete);
+    out.push({ competitor: c, active, reported, complete, newAds, stoppedAds, newCodes, newCreators: [...newCreators.values()], newDomains, lastRuns });
   }
   return { since, now, days, competitors: out };
 }
@@ -49,7 +51,9 @@ export function changesToMarkdown(ch: Changes): string {
   for (const c of ch.competitors) {
     const nothing = !c.newAds.length && !c.stoppedAds.length && !c.newCodes.length && !c.newCreators.length;
     lines.push(`## ${c.competitor.name}`, "");
-    lines.push(`${c.active} active ads · ${c.newAds.length} new · ${c.stoppedAds.length} stopped · ${c.newCodes.length} new codes · ${c.newCreators.length} new creators`, "");
+    const seen = c.reported !== null && !c.complete ? `${c.active} of ~${c.reported} active ads seen (Meta shows the first ~30)` : `${c.active} active ads`;
+    const stops = c.complete ? `${c.stoppedAds.length} stopped` : "stops not tracked";
+    lines.push(`${seen} · ${c.newAds.length} new · ${stops} · ${c.newCodes.length} new codes · ${c.newCreators.length} new creators`, "");
     if (nothing) {
       lines.push("No changes.", "");
       continue;

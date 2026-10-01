@@ -1,5 +1,5 @@
 import type { Browser } from "playwright";
-import { describeShape, extractJsonDocs, parseAds, reportedResultCount, type ParsedAd } from "./parse";
+import { describeShape, parseAds, reportedResultCount, type ParsedAd } from "./parse";
 
 export type RunStatus = "ok" | "empty" | "blocked" | "error";
 
@@ -7,11 +7,13 @@ export interface PageResult {
   status: RunStatus;
   ads: ParsedAd[];
   /**
-   * True only when the run provably saw every active ad (it reached the count
-   * the Ad Library reports). Ads missing from an incomplete run may simply not
-   * have loaded, so stops are only recorded after complete runs.
+   * True only when the run provably saw every active ad: the Page has no more
+   * active ads than the first page of results holds. For bigger advertisers
+   * only the first page is seen, so new ads are recorded but stops are not.
    */
   complete: boolean;
+  /** The total the Ad Library reports ("~500 results"), when shown. */
+  reported: number | null;
   detail: string;
   shape: ReturnType<typeof describeShape>;
 }
@@ -42,27 +44,20 @@ export function isComplete(ads: ParsedAd[], reported: number | null): boolean {
 }
 
 /**
- * Load one Page's active US ads in the public Ad Library and keep scrolling
- * to the bottom (which triggers the next GraphQL page) until the reported
- * count is reached or no new ads arrive. Reads the JSON behind the page
- * (initial HTML plus GraphQL responses), not the rendered layout.
+ * Load one Page's active US ads in the public Ad Library: the first page of
+ * results (about 30 ads) plus the total the Library reports. Reads the JSON
+ * behind the page (initial HTML plus GraphQL responses), not the layout.
  */
-export async function collectPage(browser: Browser, pageId: string, maxScrolls = 80, debug?: (msg: string) => void): Promise<PageResult> {
+export async function collectPage(browser: Browser, pageId: string, debug?: (msg: string) => void): Promise<PageResult> {
   const ctx = await browser.newContext({ userAgent: UA, locale: "en-US", timezoneId: "America/New_York", viewport: { width: 1366, height: 900 } });
   const page = await ctx.newPage();
   const bodies: string[] = [];
-  const queryNames: string[] = [];
   page.on("response", async (r) => {
     if (r.url().includes("/api/graphql")) {
-      // Request names (not content) help diagnose which query paginates.
-      const name = decodeURIComponent(/fb_api_req_friendly_name=([^&]+)/.exec(r.request().postData() ?? "")?.[1] ?? "?");
-      queryNames.push(name);
       try {
-        const text = await r.text();
-        bodies.push(text);
-        if (debug && name.includes("Pagination")) debug(`    ${name}: ${describeResponse(r.status(), text)}`);
-      } catch (err) {
-        debug?.(`    ${name}: body unreadable (${err instanceof Error ? err.message : err})`);
+        bodies.push(await r.text());
+      } catch {
+        /* response gone */
       }
     }
   });
@@ -83,64 +78,33 @@ export async function collectPage(browser: Browser, pageId: string, maxScrolls =
     const reported = reportedResultCount(await bodyText());
     const current = async () => parseAds([await page.content(), ...bodies]).filter((a) => !a.pageId || a.pageId === pageId);
 
-    let ads = await current();
-    const html0 = await page.content();
-    debug?.(`  initial: ${ads.length} ads; queries at load: ${[...new Set(queryNames)].join(", ") || "none"}; ` +
-      `html has end_cursor: ${html0.includes("end_cursor")}, has_next_page:true: ${/"has_next_page":true/.test(html0)}`);
-
-    // Pagination is rate-limited for logged-out visitors, so go gently: one
-    // scroll at a time, wait for its response, and back off when limited.
-    let still = 0;
-    let scrolls = 0;
-    let limited = 0;
-    while (scrolls < maxScrolls && still < 3 && limited < 3 && !(reported !== null && isComplete(ads, reported))) {
-      scrolls++;
-      const next = page
-        .waitForResponse((r) => r.url().includes("/api/graphql") && /Pagination/.test(r.request().postData() ?? ""), { timeout: 15_000 })
-        .then((r) => r.text())
-        .catch(() => null);
-      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-      const body = await next;
-      if (body && /Rate limit exceeded/i.test(body)) {
-        limited++;
-        debug?.(`  scroll ${scrolls}: rate limited, backing off 45s (${limited}/3)`);
-        await page.waitForTimeout(45_000);
-        // Nudge up and down so the page re-requests the same page of results.
-        await page.evaluate(() => window.scrollBy(0, -1500));
-        await page.waitForTimeout(1_000);
-        continue;
-      }
-      await page.waitForTimeout(4_000 + Math.random() * 3_000);
-      const n = await current();
-      debug?.(`  scroll ${scrolls}: ${body ? "page loaded" : "no pagination response"}, ads ${n.length}`);
-      still = n.length === ads.length ? still + 1 : 0;
-      if (n.length > ads.length) limited = 0;
-      ads = n;
+    // Only the first page of results is collected: further pages are
+    // rate-limited for logged-out visitors ("Rate limit exceeded"), and asking
+    // anyway risks the first page too. See isComplete for what that implies.
+    const ads = await current();
+    if (debug) {
+      const starts = ads.map((a) => a.startedAt?.getTime() ?? 0);
+      const newestFirst = starts.every((t, i) => i === 0 || t <= starts[i - 1]!);
+      const day = (t: number) => (t ? new Date(t).toISOString().slice(0, 10) : "?");
+      debug(`  start dates in page order: first ${day(starts[0] ?? 0)}, last ${day(starts.at(-1) ?? 0)}, ` +
+        `newest ${day(Math.max(...starts))}, oldest ${day(Math.min(...starts.filter(Boolean)))}, newest-first: ${newestFirst}`);
     }
 
     const html = await page.content();
     const shape = describeShape([html, ...bodies]);
     const url = page.url();
     const complete = isComplete(ads, reported);
-    const detail = `reported ${reported ?? "?"}, collected ${ads.length} (${ads.reduce((n, a) => n + a.collationCount, 0)} incl. grouped), ${scrolls} scrolls${limited ? `, rate-limited ${limited}x` : ""}`;
+    const detail = `reported ${reported ?? "?"}, collected ${ads.length} (${ads.reduce((n, a) => n + a.collationCount, 0)} incl. grouped)`;
 
     if (/\/login|\/checkpoint/.test(url) || (ads.length === 0 && /login_form|You must log in|Log into Facebook/i.test(html))) {
-      return { status: "blocked", ads: [], complete: false, detail: `login wall (${url.slice(0, 80)})`, shape };
+      return { status: "blocked", ads: [], complete: false, reported: null, detail: `login wall (${url.slice(0, 80)})`, shape };
     }
-    if (ads.length > 0) return { status: "ok", ads, complete, detail, shape };
-    return { status: "empty", ads: [], complete: reported === 0, detail: reported === 0 ? "Ad Library shows no active ads" : `no ads parsed; ${detail}`, shape };
+    if (ads.length > 0) return { status: "ok", ads, complete, reported, detail, shape };
+    return { status: "empty", ads: [], complete: reported === 0, reported, detail: reported === 0 ? "Ad Library shows no active ads" : `no ads parsed; ${detail}`, shape };
   } catch (err) {
-    return { status: "error", ads: [], complete: false, detail: String(err instanceof Error ? err.message : err).slice(0, 500), shape: describeShape(bodies) };
+    return { status: "error", ads: [], complete: false, reported: null, detail: String(err instanceof Error ? err.message : err).slice(0, 500), shape: describeShape(bodies) };
   } finally {
     await ctx.close();
   }
 }
 
-/** A content-free summary of a GraphQL response, for diagnosing pagination. */
-function describeResponse(status: number, text: string): string {
-  const ids = (text.match(/"ad_archive_id"/g) ?? []).length;
-  const errors = [...text.matchAll(/"(?:message|summary|description)":"([^"]{0,140})"/g)].map((m) => m[1]).slice(0, 3);
-  const start = text.slice(0, 60).replace(/[^\x20-\x7e]/g, "?");
-  const docs = extractJsonDocs(text).length;
-  return `HTTP ${status}, ${text.length} bytes, ${docs} JSON docs, ${ids} ad_archive_id, starts "${start}"${errors.length ? `, messages: ${errors.join(" | ")}` : ""}`;
-}

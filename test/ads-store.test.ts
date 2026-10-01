@@ -14,7 +14,7 @@ const ad = (id: string, text = "Trade the game."): ParsedAd => ({
   landingDomain: "kalshi.com", displayFormat: "IMAGE", collationCount: 1, allText: text,
 });
 const result = (status: PageResult["status"], ads: ParsedAd[], complete = status === "ok"): PageResult => ({
-  status, ads, complete, detail: "", shape: { adObjects: ads.length, topKeys: [], snapshotKeys: [] },
+  status, ads, complete, reported: complete ? ads.length : null, detail: "", shape: { adObjects: ads.length, topKeys: [], snapshotKeys: [] },
 });
 const t = (h: number) => new Date(Date.UTC(2026, 9, 1, h));
 

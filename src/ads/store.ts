@@ -20,7 +20,8 @@ export async function storeResult(
   await db.adCollectionRun.create({
     data: {
       competitorId: competitor.id, pageId, startedAt, finishedAt: now,
-      status: result.status, adsFound: result.ads.length, detail: result.detail,
+      status: result.status, adsFound: result.ads.length, reportedCount: result.reported,
+      complete: result.complete, detail: result.detail,
     },
   });
 

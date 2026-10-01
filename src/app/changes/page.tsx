@@ -17,7 +17,8 @@ export default async function Changes({ searchParams }: { searchParams: Search }
       <h1>What changed</h1>
       <p className="sub">
         Sponsor watch, {day(ch.since)} to {day(ch.now)}: new and stopped ads, new codes, and creators seen carrying a
-        competitor for the first time. For a Markdown copy, run <code>npm run report</code>.
+        competitor for the first time. Meta shows only the first ~30 ads per advertiser, so for bigger advertisers ads
+        are a sample and stops aren't tracked. For a Markdown copy, run <code>npm run report</code>.
       </p>
       <div className="tabs">
         {[7, 14, 30].map((d) => (
@@ -34,9 +35,9 @@ export default async function Changes({ searchParams }: { searchParams: Search }
             {ch.competitors.map((c) => (
               <tr key={c.competitor.id}>
                 <td><a href={`#c${c.competitor.id}`}>{c.competitor.name}</a></td>
-                <td className="num">{num(c.active)}</td>
+                <td className="num">{num(c.active)}{c.reported !== null && !c.complete ? <span className="muted"> of ~{num(c.reported)}</span> : null}</td>
                 <td className="num">{num(c.newAds.length)}</td>
-                <td className="num">{num(c.stoppedAds.length)}</td>
+                <td className="num">{c.complete ? num(c.stoppedAds.length) : <span className="muted">not tracked</span>}</td>
                 <td className="num">{num(c.newCodes.length)}</td>
                 <td className="num">{num(c.newCreators.length)}</td>
                 <td className="muted">{c.newDomains.join(", ") || "—"}</td>

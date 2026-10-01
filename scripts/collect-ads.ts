@@ -20,11 +20,11 @@ try {
       if (onlyPage && pageId !== onlyPage) continue;
       pages++;
       const startedAt = new Date();
-      const result = await collectPage(browser, pageId, 80, probe ? console.log : undefined);
+      const result = await collectPage(browser, pageId, probe ? console.log : undefined);
       const stored = await storeResult(db, { id: c.id, codes: c.codes.map((x) => x.code) }, pageId, result, startedAt);
       if (result.status === "ok" || result.status === "empty") okPages++;
       console.log(
-        `${c.name} (${pageId}): ${result.status}${result.complete ? ", complete" : ", PARTIAL (no stops recorded)"}, ${result.ads.length} active ads, ${stored.newAds} new, ` +
+        `${c.name} (${pageId}): ${result.status}${result.complete ? ", complete" : `, first page only (no stops recorded)`}, ${result.ads.length} active ads, ${stored.newAds} new, ` +
           `${stored.stopped} stopped, ${stored.newCodes.length} new codes. ${result.detail}`,
       );
       if (probe || result.status !== "ok") console.log(`  shape: ${JSON.stringify(result.shape)}`);

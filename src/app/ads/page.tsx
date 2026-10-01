@@ -19,22 +19,25 @@ export default async function Ads({ searchParams }: { searchParams: Search }) {
     <>
       <h1>Meta ads</h1>
       <p className="sub">
-        Competitors' active US ads from the public Meta Ad Library, collected daily. "Started" is when Meta says the ad
-        began running. See <Link href="/changes">Changes</Link> for what's new this week.
+        Competitors' active US ads from the public Meta Ad Library, collected daily. Meta shows a logged-out visitor
+        only the first ~30 ads per advertiser, so for bigger advertisers this is a sample: new ads are recorded, but
+        stopped ads are only tracked when every active ad is visible. "Started" is when Meta says the ad began running.
+        See <Link href="/changes">Changes</Link> for what's new this week.
       </p>
 
       <div className="table-wrap">
         <table>
           <thead>
-            <tr><th>Competitor</th><th className="num">Active ads</th><th className="num">New, 7d</th><th className="num">Stopped, 7d</th><th>Last collection</th></tr>
+            <tr><th>Competitor</th><th className="num">Active ads seen</th><th className="num">Meta reports</th><th className="num">New, 7d</th><th className="num">Stopped, 7d</th><th>Last collection</th></tr>
           </thead>
           <tbody>
             {summary.map((s) => (
               <tr key={s.competitor.id}>
                 <td><Link href={href({ competitor: s.competitor.id })}>{s.competitor.name}</Link></td>
                 <td className="num">{s.competitor.fbPageIds.length ? num(s.active) : <span className="muted">no Page IDs</span>}</td>
+                <td className="num">{s.reported === null ? <span className="muted">—</span> : `~${num(s.reported)}`}</td>
                 <td className="num">{num(s.newThisWeek)}</td>
-                <td className="num">{num(s.stoppedThisWeek)}</td>
+                <td className="num">{s.allComplete ? num(s.stoppedThisWeek) : <span className="muted" title="Only part of this advertiser's ads are visible, so stops can't be told apart from ads that didn't load">not tracked</span>}</td>
                 <td className={s.lastRun?.status === "ok" ? "muted" : s.lastRun ? "warn" : "muted"}>
                   {s.lastRun ? `${RUN_LABEL[s.lastRun.status] ?? s.lastRun.status}, ${ago(s.lastRun.startedAt)}` : "never"}
                 </td>

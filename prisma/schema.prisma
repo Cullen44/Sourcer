@@ -289,6 +289,10 @@ model AdCollectionRun {
   /// ok | empty | blocked | error
   status       String
   adsFound     Int       @default(0) @map("ads_found")
+  /// Total active ads the Ad Library reports for the Page ("~500 results").
+  reportedCount Int?     @map("reported_count")
+  /// Whether every active ad was seen (only then are stops recorded).
+  complete     Boolean   @default(false)
   detail       String?
 
   competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)

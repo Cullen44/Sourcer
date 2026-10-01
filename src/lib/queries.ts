@@ -297,12 +297,21 @@ export async function adSummary() {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000);
   const competitors = await db.competitor.findMany({ orderBy: [{ priority: "asc" }, { name: "asc" }] });
   return Promise.all(
-    competitors.map(async (c) => ({
-      competitor: c,
-      active: await db.competitorAd.count({ where: { competitorId: c.id, isActive: true } }),
-      newThisWeek: await db.competitorAd.count({ where: { competitorId: c.id, firstObservedAt: { gte: weekAgo } } }),
-      stoppedThisWeek: await db.competitorAd.count({ where: { competitorId: c.id, stoppedAt: { gte: weekAgo } } }),
-      lastRun: await db.adCollectionRun.findFirst({ where: { competitorId: c.id }, orderBy: { startedAt: "desc" } }),
-    })),
+    competitors.map(async (c) => {
+      // Latest run per Page; a competitor is fully visible only if every Page's latest run was complete.
+      const runs = await Promise.all(
+        c.fbPageIds.map((pageId) => db.adCollectionRun.findFirst({ where: { competitorId: c.id, pageId }, orderBy: { startedAt: "desc" } })),
+      );
+      const latest = runs.filter((r) => r !== null);
+      return {
+        competitor: c,
+        active: await db.competitorAd.count({ where: { competitorId: c.id, isActive: true } }),
+        newThisWeek: await db.competitorAd.count({ where: { competitorId: c.id, firstObservedAt: { gte: weekAgo } } }),
+        stoppedThisWeek: await db.competitorAd.count({ where: { competitorId: c.id, stoppedAt: { gte: weekAgo } } }),
+        lastRun: latest.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0] ?? null,
+        reported: latest.some((r) => r.reportedCount !== null) ? latest.reduce((n, r) => n + (r.reportedCount ?? 0), 0) : null,
+        allComplete: latest.length > 0 && latest.length === c.fbPageIds.length && latest.every((r) => r.complete),
+      };
+    }),
   );
 }
