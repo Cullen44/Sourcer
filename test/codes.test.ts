@@ -6,6 +6,7 @@ const competitors: CompetitorRef[] = [
   { id: 2, name: "Polymarket", domains: ["polymarket.com", "poly2016.com"], codes: ["2016"] },
   { id: 3, name: "Underdog Fantasy", domains: ["underdogfantasy.com"], codes: [] },
   { id: 4, name: "PrizePicks", domains: ["prizepicks.com"], codes: [] },
+  { id: 5, name: "1v1Me", domains: ["1v1me.com"], codes: [] },
 ];
 
 describe("extractCodes", () => {
@@ -53,5 +54,11 @@ describe("analyze", () => {
       { competitorId: 1, codes: ["AAA111"] },
       { competitorId: 4, codes: ["BBB222"] },
     ]);
+  });
+
+  it("treats '1v1Me' as the brand only next to promo language or its domain", () => {
+    expect(analyze("1v1me for $50, winner takes all | Tekken 8", competitors)).toEqual([]);
+    expect(analyze("Use code CULLEN on 1v1Me to play for cash", competitors)).toEqual([{ competitorId: 5, codes: ["CULLEN"] }]);
+    expect(analyze("Wager matches at 1v1me.com tonight", competitors)).toEqual([{ competitorId: 5, codes: [] }]);
   });
 });

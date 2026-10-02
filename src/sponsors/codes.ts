@@ -26,6 +26,12 @@ const WEAK_ALIASES: Record<string, string[]> = {
 };
 const PROMO_CONTEXT = /\b(promo|code|sign ?up|deposit|bonus|referral|sponsor(ed)?|#ad)\b/i;
 
+/**
+ * Brand names that are also common phrases ("1v1 me" is gamer talk). They
+ * count only next to promo language; their domains always count.
+ */
+const WEAK_NAMES = new Set(["1v1Me"]);
+
 /** Words that follow "code" in prose but are not codes. */
 const NOT_CODES = new Set([
   "BELOW", "ABOVE", "HERE", "LINK", "IN", "AT", "FOR", "AND", "THE", "TO", "ON", "WITH", "IS", "TODAY",
@@ -38,8 +44,10 @@ function escape(s: string) {
 }
 
 function termsFor(c: CompetitorRef, text: string): string[] {
-  const weak = PROMO_CONTEXT.test(text) ? (WEAK_ALIASES[c.name] ?? []) : [];
-  return [c.name, ...c.domains, ...(ALIASES[c.name] ?? []), ...weak];
+  const promo = PROMO_CONTEXT.test(text);
+  const weak = promo ? (WEAK_ALIASES[c.name] ?? []) : [];
+  const name = WEAK_NAMES.has(c.name) && !promo ? [] : [c.name];
+  return [...name, ...c.domains, ...(ALIASES[c.name] ?? []), ...weak];
 }
 
 /** Character offsets where each competitor is mentioned. */

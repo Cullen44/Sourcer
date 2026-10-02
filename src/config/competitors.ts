@@ -14,6 +14,8 @@ export interface CompetitorSeed {
 }
 
 export const COMPETITORS: CompetitorSeed[] = [
+  // The home brand, tracked the same way as a baseline for the competitors.
+  { name: "1v1Me", priority: 1, fbPageIds: ["104528351230896"], domains: ["1v1me.com"], knownCodes: [] },
   { name: "Kalshi", priority: 1, fbPageIds: ["108107432370909"], domains: ["kalshi.com"], knownCodes: ["2KSIGNUP"] },
   { name: "Polymarket", priority: 1, fbPageIds: ["101309195074880"], domains: ["polymarket.com", "poly2016.com"], knownCodes: ["2016"] },
   { name: "Underdog Fantasy", priority: 1, fbPageIds: ["100653998267239"], domains: ["underdogfantasy.com"], knownCodes: [] },
