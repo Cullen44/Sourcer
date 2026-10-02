@@ -17,7 +17,12 @@ export async function isSaved(key: { creatorId: number } | { youtubeChannelId: s
 export async function getWatchlist() {
   const saved = await db.savedCreator.findMany({
     include: {
-      creator: { include: { youtubeChannels: { where: { status: "tracked" }, take: 1 } } },
+      creator: {
+        include: {
+          youtubeChannels: { where: { status: "tracked" }, take: 1 },
+          twitchDaily: { where: { followers: { not: null } }, orderBy: { date: "desc" }, take: 14 },
+        },
+      },
       youtubeChannel: true,
     },
     orderBy: { savedAt: "desc" },
@@ -50,7 +55,13 @@ export async function getWatchlist() {
           ),
           db.streamObservation.findFirst({ where: { creatorId: c.id }, orderBy: { observedAt: "desc" }, include: { game: true } }),
         ]);
+        const latestSnap = c.twitchDaily[0];
+        const weekBack = latestSnap && c.twitchDaily.find((d) => latestSnap.date.getTime() - d.date.getTime() >= 7 * DAY);
         twitch = {
+          followers: c.followers,
+          followersWeekAgo: weekBack?.followers ?? null,
+          labels: c.contentLabels,
+          branded: c.brandedContent,
           live: live ? { title: live.title, game: live.game.name, viewers: live.viewerCount } : null,
           avg7d: week[0]?.avg ?? null,
           streams7d: week[0]?.streams ?? 0,
@@ -74,6 +85,7 @@ export async function getWatchlist() {
           title: yt.title,
           medianViews: yt.medianViews,
           medianViewsWeekAgo: weekAgo?.medianViews ?? null,
+          engagementRate: yt.engagementRate,
           uploads30d: yt.uploads30d,
           subscribers: yt.subscriberCount,
           lastUploadAt: yt.lastUploadAt,

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Fragment } from "react";
 import { getWatchlist } from "../../lib/watchlist";
 import { saveNote } from "../actions";
-import { ago, day, num } from "../format";
+import { ago, day, labelName, num, pct } from "../format";
 import { SaveButton } from "../save-button";
 
 export const dynamic = "force-dynamic";
@@ -38,8 +38,10 @@ export default async function Watchlist() {
                 <th>Now</th>
                 <th className="num">Twitch avg 7d</th>
                 <th className="num">Streams 7d</th>
+                <th className="num">Followers</th>
                 <th className="num">YT median views</th>
                 <th className="num">YT uploads 30d</th>
+                <th className="num">YT engagement</th>
                 <th>Latest</th>
                 <th>Sponsors seen</th>
               </tr>
@@ -59,6 +61,12 @@ export default async function Watchlist() {
                       {e.twitch && <span className="badge twitch">Twitch</span>}
                       {e.youtube && <Link href={`/youtube/${e.youtube.channelId}`} className="badge youtube">YouTube</Link>}
                     </div>
+                    {e.twitch && (e.twitch.branded || e.twitch.labels.length > 0) && (
+                      <div style={{ marginTop: 2 }}>
+                        {e.twitch.branded && <span className="chip warn">Branded</span>}
+                        {e.twitch.labels.map((l) => <span key={l} className="chip">{labelName(l)}</span>)}
+                      </div>
+                    )}
                   </td>
                   <td style={{ minWidth: 140 }}>
                     {e.twitch?.live ? (
@@ -71,8 +79,10 @@ export default async function Watchlist() {
                   </td>
                   <td className="num">{e.twitch ? <>{num(e.twitch.avg7d)}<Change now={e.twitch.avg7d} before={e.twitch.avgPrev7d} /></> : <span className="muted">—</span>}</td>
                   <td className="num">{e.twitch ? num(e.twitch.streams7d) : <span className="muted">—</span>}</td>
+                  <td className="num">{e.twitch?.followers != null ? <>{num(e.twitch.followers)}<Change now={e.twitch.followers} before={e.twitch.followersWeekAgo} /></> : <span className="muted">—</span>}</td>
                   <td className="num">{e.youtube ? <>{num(e.youtube.medianViews)}<Change now={e.youtube.medianViews} before={e.youtube.medianViewsWeekAgo} /></> : <span className="muted">—</span>}</td>
                   <td className="num">{e.youtube ? num(e.youtube.uploads30d) : <span className="muted">—</span>}</td>
+                  <td className="num">{e.youtube ? pct(e.youtube.engagementRate) : <span className="muted">—</span>}</td>
                   <td style={{ minWidth: 220, maxWidth: 300, fontSize: 13 }}>
                     {e.twitch?.latest ? <div><span className="muted">Stream {ago(e.twitch.latest.at)}:</span> {e.twitch.latest.title}</div> : null}
                     {e.youtube?.latestVideo ? (
@@ -94,7 +104,7 @@ export default async function Watchlist() {
                 </tr>
                 <tr>
                   <td></td>
-                  <td colSpan={8}>
+                  <td colSpan={10}>
                     <form action={saveNote} className="note-form">
                       <input type="hidden" name="savedId" value={e.saved.id} />
                       <input className="note" name="note" defaultValue={e.saved.note ?? ""} placeholder="Add a note (outreach status, why they're interesting…)" />

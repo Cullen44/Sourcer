@@ -55,6 +55,22 @@ describe("vetting", () => {
     expect(m.medianViews).toBe(4_000);
   });
 
+  it("engagement is the median per-upload rate, skipping hidden likes", () => {
+    const base = uploads(5, "Tekken 8", 10_000);
+    const m = computeMetrics(
+      [
+        { ...base[0]!, likeCount: 300, commentCount: 100 }, // 4%
+        { ...base[1]!, likeCount: 500, commentCount: 100 }, // 6%
+        { ...base[2]!, likeCount: 150, commentCount: 50 }, // 2%
+        { ...base[3]!, likeCount: 9_000, commentCount: 1_000 }, // viral outlier, 100%
+        { ...base[4]!, likeCount: null, commentCount: 20 }, // likes hidden: left out
+      ],
+      now,
+    );
+    expect(m.engagementRate).toBeCloseTo(0.05, 5); // median of 2%, 4%, 6%, 100%
+    expect(computeMetrics(uploads(5, "Tekken 8", 10_000), now).engagementRate).toBeNull();
+  });
+
   it("median", () => {
     expect(median([])).toBeNull();
     expect(median([3, 1, 2])).toBe(2);

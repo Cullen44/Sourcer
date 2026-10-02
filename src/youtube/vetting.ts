@@ -6,6 +6,9 @@ export interface UploadFacts {
   tags?: string[];
   publishedAt: Date;
   viewCount: number | null;
+  /** Null when hidden (likes) or turned off (comments). */
+  likeCount?: number | null;
+  commentCount?: number | null;
   durationSeconds: number | null;
 }
 
@@ -14,6 +17,8 @@ export interface ChannelMetrics {
   titleShare: number;
   primaryTitle: string | null;
   medianViews: number | null;
+  /** Median (likes + comments) / views per upload, over the same uploads as medianViews. */
+  engagementRate: number | null;
   uploads30d: number;
   lastUploadAt: Date | null;
 }
@@ -39,6 +44,7 @@ export function computeMetrics(uploads: UploadFacts[], now: Date): ChannelMetric
     titleShare: uploads.length ? matched.length / uploads.length : 0,
     primaryTitle,
     medianViews: median(basis.map((u) => u.viewCount!)),
+    engagementRate: engagement(basis),
     uploads30d: uploads.filter((u) => now.getTime() - u.publishedAt.getTime() <= 30 * DAY).length,
     lastUploadAt: uploads.length ? new Date(Math.max(...uploads.map((u) => u.publishedAt.getTime()))) : null,
   };
@@ -55,6 +61,20 @@ export function vet(m: ChannelMetrics, cfg: typeof DISCOVERY = DISCOVERY): { ok:
   if (m.medianViews < cfg.minMedianViews) return { ok: false, reason: `too small: median ${fmt(m.medianViews)} views` };
   if (m.medianViews > cfg.maxMedianViews) return { ok: false, reason: `too large: median ${fmt(m.medianViews)} views` };
   return { ok: true };
+}
+
+/**
+ * Median per-upload engagement. A median, not a pooled ratio, so one viral
+ * upload doesn't set the rate. Uploads with hidden likes are left out.
+ */
+function engagement(uploads: UploadFacts[]): number | null {
+  const rates = uploads
+    .filter((u) => u.likeCount !== null && u.likeCount !== undefined && u.viewCount)
+    .map((u) => (u.likeCount! + (u.commentCount ?? 0)) / u.viewCount!)
+    .sort((a, b) => a - b);
+  if (rates.length === 0) return null;
+  const mid = Math.floor(rates.length / 2);
+  return rates.length % 2 ? rates[mid]! : (rates[mid - 1]! + rates[mid]!) / 2;
 }
 
 export function median(xs: number[]): number | null {

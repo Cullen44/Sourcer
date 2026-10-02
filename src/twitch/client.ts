@@ -28,6 +28,19 @@ export interface HelixGame {
 interface Page<T> {
   data: T[];
   pagination?: { cursor?: string };
+  /** Present on some endpoints, e.g. /channels/followers. */
+  total?: number;
+}
+
+/** A Helix request that failed with a non-retryable status. */
+export class HelixError extends Error {
+  constructor(
+    readonly path: string,
+    readonly status: number,
+    body: string,
+  ) {
+    super(`Twitch ${path} failed: ${status} ${body}`);
+  }
 }
 
 /**
@@ -38,6 +51,9 @@ export class TwitchClient {
   private token: string | null = null;
   /** Count of Helix requests made, for logging/run stats. */
   requests = 0;
+  /** Rate-limit bucket state from the last response (app tokens get 800 points a minute). */
+  private remaining = Infinity;
+  private resetAt = 0;
 
   constructor(
     private readonly clientId: string,
@@ -71,10 +87,17 @@ export class TwitchClient {
     const url = `${HELIX}${path}?${qs}`;
 
     for (let attempt = 0; attempt < 4; attempt++) {
+      // Nearly out of points: wait for the bucket to refill rather than collect 429s.
+      if (this.remaining < 5 && this.resetAt > Date.now()) await sleep(Math.min(this.resetAt - Date.now() + 250, 60_000));
       this.requests++;
       const res = await this.fetchImpl(url, {
         headers: { "Client-Id": this.clientId, Authorization: `Bearer ${await this.getToken()}` },
       });
+      const remaining = res.headers.get("Ratelimit-Remaining");
+      if (remaining !== null) {
+        this.remaining = Number(remaining);
+        this.resetAt = Number(res.headers.get("Ratelimit-Reset")) * 1000;
+      }
       if (res.ok) return (await res.json()) as Page<T>;
       if (res.status === 401 && attempt === 0) {
         this.token = null; // expired or revoked; fetch a new one and retry
@@ -86,7 +109,7 @@ export class TwitchClient {
         await sleep(Math.min(waitMs, 60_000));
         continue;
       }
-      throw new Error(`Twitch ${path} failed: ${res.status} ${await res.text()}`);
+      throw new HelixError(path, res.status, await res.text());
     }
     throw new Error(`Twitch ${path} failed after retries`);
   }

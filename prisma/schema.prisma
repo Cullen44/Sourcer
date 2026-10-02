@@ -44,6 +44,16 @@ model Creator {
   enrichedAt       DateTime? @map("enriched_at")
   /// When the bio was last checked for a YouTube link (found or not).
   youtubeCheckedAt DateTime? @map("youtube_checked_at")
+  /// Audience metrics, refreshed once a day (history in creator_twitch_daily).
+  followers        Int?
+  /// Clips made of the channel in the last 30 days (counted up to 500), and their views.
+  clips30d         Int?      @map("clips_30d")
+  clipViews30d     Int?      @map("clip_views_30d")
+  /// Twitch content classification labels on the channel (Gambling, MatureGame, ...).
+  contentLabels    String[]  @default([]) @map("content_labels")
+  /// The channel is flagged as carrying branded (sponsored) content.
+  brandedContent   Boolean?  @map("branded_content")
+  metricsAt        DateTime? @map("metrics_at")
 
   observations     StreamObservation[]
   daily            CreatorDaily[]
@@ -51,6 +61,7 @@ model Creator {
   scores           CreatorScore[]
   sponsorMentions  SponsorMention[]
   saved            SavedCreator?
+  twitchDaily      CreatorTwitchDaily[]
 
   @@index([lastSeenAt])
   @@map("creators")
@@ -115,6 +126,20 @@ model CreatorDaily {
   @@map("creator_daily")
 }
 
+/// Daily audience snapshot per Twitch creator, so follower growth can be read.
+model CreatorTwitchDaily {
+  creatorId    Int      @map("creator_id")
+  date         DateTime @db.Date
+  followers    Int?
+  clips30d     Int?     @map("clips_30d")
+  clipViews30d Int?     @map("clip_views_30d")
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@id([creatorId, date])
+  @@map("creator_twitch_daily")
+}
+
 /// A YouTube channel, from one of three sources:
 ///   twitch_link: linked from a Twitch creator's profile (always tracked)
 ///   discovery:   found by title searches; must pass the vetting filters
@@ -139,6 +164,8 @@ model YoutubeChannel {
   /// Share of recent uploads that are about any target title (0-1).
   titleShare        Float?    @map("title_share")
   medianViews       Int?      @map("median_views")
+  /// Median (likes + comments) / views over recent uploads (0-1).
+  engagementRate    Float?    @map("engagement_rate")
   uploads30d        Int?      @map("uploads_30d")
   lastUploadAt      DateTime? @map("last_upload_at")
   discoveredAt      DateTime  @default(now()) @map("discovered_at")
@@ -162,6 +189,9 @@ model YoutubeVideo {
   description     String?
   publishedAt     DateTime @map("published_at")
   viewCount       BigInt?  @map("view_count")
+  /// Null when the channel hides likes or has comments turned off.
+  likeCount       BigInt?  @map("like_count")
+  commentCount    BigInt?  @map("comment_count")
   durationSeconds Int?     @map("duration_seconds")
   /// Canonical target title this video is about, if any.
   canonicalTitle  String?  @map("canonical_title")
@@ -179,6 +209,7 @@ model YoutubeChannelDaily {
   date            DateTime @db.Date
   subscriberCount BigInt?  @map("subscriber_count")
   medianViews     Int?     @map("median_views")
+  engagementRate  Float?   @map("engagement_rate")
   uploads30d      Int?     @map("uploads_30d")
 
   channel YoutubeChannel @relation(fields: [channelId], references: [channelId], onDelete: Cascade)

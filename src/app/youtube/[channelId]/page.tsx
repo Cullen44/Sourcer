@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getYoutubeChannel } from "../../../lib/queries";
 import { isSaved } from "../../../lib/watchlist";
-import { ago, day, num } from "../../format";
+import { ago, day, num, pct } from "../../format";
 import { SaveButton } from "../../save-button";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +33,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ channe
         <div className="card"><div className="label">Main title</div><div className="value" style={{ fontSize: 18 }}>{c.primaryTitle ?? "—"}</div>
           <div className="note">{c.titleShare === null ? "" : `${Math.round(c.titleShare * 100)}% of recent uploads on target titles`}</div></div>
         <div className="card"><div className="label">Median views</div><div className="value">{num(c.medianViews)}</div><div className="note">recent uploads</div></div>
+        <div className="card"><div className="label">Engagement</div><div className="value">{pct(c.engagementRate)}</div><div className="note">median (likes + comments) / views</div></div>
         <div className="card"><div className="label">Uploads, 30 days</div><div className="value">{num(c.uploads30d)}</div><div className="note">last {ago(c.lastUploadAt)}</div></div>
         <div className="card"><div className="label">Subscribers</div><div className="value">{num(c.subscriberCount)}</div><div className="note">{num(c.videoCount)} videos total</div></div>
       </div>
@@ -63,7 +64,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ channe
       <div className="table-wrap">
         {c.videos.length === 0 ? <div className="empty">Not fetched yet.</div> : (
           <table>
-            <thead><tr><th>Published</th><th>Title</th><th>About</th><th className="num">Length</th><th className="num">Views</th></tr></thead>
+            <thead><tr><th>Published</th><th>Title</th><th>About</th><th className="num">Length</th><th className="num">Views</th><th className="num">Likes</th><th className="num">Comments</th><th className="num">Engagement</th></tr></thead>
             <tbody>
               {c.videos.map((v) => (
                 <tr key={v.videoId}>
@@ -72,6 +73,9 @@ export default async function ChannelPage({ params }: { params: Promise<{ channe
                   <td>{v.canonicalTitle ? <span className="chip">{v.canonicalTitle}</span> : <span className="muted">other</span>}</td>
                   <td className="num muted">{v.durationSeconds === null ? "—" : fmtDuration(v.durationSeconds)}</td>
                   <td className="num">{num(v.viewCount)}</td>
+                  <td className="num">{v.likeCount === null ? <span className="muted" title="Hidden by the channel, or not fetched yet">—</span> : num(v.likeCount)}</td>
+                  <td className="num">{num(v.commentCount)}</td>
+                  <td className="num">{v.likeCount !== null && v.viewCount ? pct((Number(v.likeCount) + Number(v.commentCount ?? 0)) / Number(v.viewCount)) : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -83,13 +87,14 @@ export default async function ChannelPage({ params }: { params: Promise<{ channe
       <div className="table-wrap">
         {c.daily.length === 0 ? <div className="empty">Builds up one row per nightly refresh.</div> : (
           <table>
-            <thead><tr><th>Date</th><th className="num">Subscribers</th><th className="num">Median views</th><th className="num">Uploads 30d</th></tr></thead>
+            <thead><tr><th>Date</th><th className="num">Subscribers</th><th className="num">Median views</th><th className="num">Engagement</th><th className="num">Uploads 30d</th></tr></thead>
             <tbody>
               {c.daily.map((d) => (
                 <tr key={day(d.date)}>
                   <td>{day(d.date)}</td>
                   <td className="num">{num(d.subscriberCount)}</td>
                   <td className="num">{num(d.medianViews)}</td>
+                  <td className="num">{pct(d.engagementRate)}</td>
                   <td className="num">{num(d.uploads30d)}</td>
                 </tr>
               ))}

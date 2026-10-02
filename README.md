@@ -25,7 +25,8 @@ GitHub Actions, no server:
 - `poll.yml`, every 20 min: live streams on each target game down to `VIEWER_FLOOR`, plus every tracked creator's live stream in *any* category. Without that second sweep, relevance (share of streaming on target titles) can't be computed.
 - `nightly.yml`, 08:15 UTC (after the YouTube quota resets at midnight Pacific): applies migrations, rolls observations up into `creator_daily` and deletes raw rows older than 7 days, then runs `npm run daily`:
   - Twitch profiles for new creators, and a scan of stream titles for competitor names and codes (free).
-  - YouTube, each stage capped to its share of the 10,000 units/day (see `src/config/youtube.ts`): links from Twitch bios, promo-code search, discovery search, vetting, refresh of tracked channels.
+  - Twitch audience metrics, once per creator per day, for everyone seen on a target title in the last 30 days: followers (with a daily snapshot, so growth shows after a week), clips made in the last 30 days and their views, content classification labels (Gambling, Mature game, …) and the branded-content flag. About 2 requests per creator, paced to Twitch's rate limit.
+  - YouTube, each stage capped to its share of the 10,000 units/day (see `src/config/youtube.ts`): links from Twitch bios, promo-code search, discovery search, vetting, refresh of tracked channels. The refresh also records likes and comments, giving each channel an engagement rate: the median of (likes + comments) / views over recent uploads. It costs no extra quota.
 - `setup-db.yml`, manual: applies migrations and seeds games and competitors.
 
 Scheduled workflows stay off until the repo variable `POLLER_ENABLED` is `true`.
@@ -43,7 +44,7 @@ Scheduled workflows stay off until the repo variable `POLLER_ENABLED` is `true`.
 
 ## Viewing the data locally
 
-A browser for what's been collected: poller health, creators across Twitch and YouTube (filter by platform, title, language, viewer and upload numbers, recency), YouTube discovery, sponsor mentions, Meta ads and weekly changes. It shows facts, not rankings. The one thing it writes is the **watchlist**: save creators with ☆, add notes, and monitor them on the Watchlist page (live status, recent numbers vs the week before, latest content, sponsor mentions).
+A browser for what's been collected: poller health, creators across Twitch and YouTube (filter by platform, title, language, viewers, followers and growth, clips, content labels, YouTube views, uploads and engagement, recency), YouTube discovery, sponsor mentions, Meta ads and weekly changes. It shows facts, not rankings. The one thing it writes is the **watchlist**: save creators with ☆, add notes, and monitor them on the Watchlist page (live status, recent numbers vs the week before, latest content, sponsor mentions).
 
 1. Install Node.js 22 from nodejs.org.
 2. Clone the repo and switch to the working branch:

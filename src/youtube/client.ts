@@ -34,7 +34,7 @@ export interface SearchItem {
 export interface VideoItem {
   id: string;
   snippet: Snippet;
-  statistics?: { viewCount?: string };
+  statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
   contentDetails?: { duration?: string };
 }
 

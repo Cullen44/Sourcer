@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCreator } from "../../../lib/queries";
 import { isSaved } from "../../../lib/watchlist";
-import { ago, day, num } from "../../format";
+import { ago, compact, day, labelName, num, pct } from "../../format";
 import { SaveButton } from "../../save-button";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,10 @@ export default async function CreatorPage({ params }: { params: Promise<{ id: st
   if (!data) notFound();
   const { creator: c, games, streams, daily } = data;
   const saved = await isSaved({ creatorId: c.id });
+  // Follower change against the snapshot about a week back, once there is one.
+  const latest = c.twitchDaily.find((d) => d.followers !== null);
+  const weekBack = latest && c.twitchDaily.find((d) => d.followers !== null && latest.date.getTime() - d.date.getTime() >= 7 * 86_400_000);
+  const growth = latest && weekBack && weekBack.followers ? (latest.followers! - weekBack.followers) / weekBack.followers : null;
 
   return (
     <>
@@ -27,6 +31,27 @@ export default async function CreatorPage({ params }: { params: Promise<{ id: st
         ))}
       </p>
       {c.description && <p className="note-box">{c.description}</p>}
+
+      <div className="cards">
+        <div className="card">
+          <div className="label">Followers</div>
+          <div className="value">{num(c.followers)}</div>
+          <div className="note">{growth === null ? "change shows after a week of snapshots" : <span className={growth > 0 ? "up" : growth < 0 ? "down" : ""}>{pct(growth, true)} in 7 days</span>}</div>
+        </div>
+        <div className="card">
+          <div className="label">Clips, 30 days</div>
+          <div className="value">{c.clips30d === null ? "—" : c.clips30d >= 500 ? "500+" : num(c.clips30d)}</div>
+          <div className="note">{c.clipViews30d === null ? "" : `${compact(c.clipViews30d)} views`}</div>
+        </div>
+        <div className="card">
+          <div className="label">Content labels</div>
+          <div className="value" style={{ fontSize: 14 }}>
+            {c.brandedContent && <span className="chip warn">Branded content</span>}
+            {c.contentLabels.length ? c.contentLabels.map((l) => <span key={l} className="chip">{labelName(l)}</span>) : !c.brandedContent && <span className="muted">none</span>}
+          </div>
+          <div className="note">{c.metricsAt ? `checked ${ago(c.metricsAt)}` : "not checked yet"}</div>
+        </div>
+      </div>
 
       <h2>Games, last 7 days</h2>
       <div className="table-wrap">
@@ -92,6 +117,27 @@ export default async function CreatorPage({ params }: { params: Promise<{ id: st
           </table>
         )}
       </div>
+
+      {c.twitchDaily.length > 0 && (
+        <>
+          <h2>Audience history</h2>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Date (UTC)</th><th className="num">Followers</th><th className="num">Clips 30d</th><th className="num">Clip views 30d</th></tr></thead>
+              <tbody>
+                {c.twitchDaily.map((d) => (
+                  <tr key={day(d.date)}>
+                    <td>{day(d.date)}</td>
+                    <td className="num">{num(d.followers)}</td>
+                    <td className="num">{num(d.clips30d)}</td>
+                    <td className="num">{num(d.clipViews30d)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {c.sponsorMentions.length > 0 && (
         <>

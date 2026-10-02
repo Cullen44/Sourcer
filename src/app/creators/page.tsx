@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { filterOptions, listCreators, PAGE_SIZE, type CreatorRow, type Platform } from "../../lib/queries";
-import { ago, num } from "../format";
+import { ago, compact, labelName, num, pct } from "../format";
 import { SaveButton } from "../save-button";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +17,7 @@ export default async function Creators({ searchParams }: { searchParams: Search 
   const sp = await searchParams;
   const platform = (["all", "twitch", "youtube"].includes(sp.platform ?? "") ? sp.platform : "all") as Platform;
   const int = (v: string | undefined) => (v && /^\d+$/.test(v.trim()) ? Number(v.trim()) : null);
+  const dec = (v: string | undefined) => (v && /^-?\d+(\.\d+)?$/.test(v.trim()) ? Number(v.trim()) : null);
   const showTwitch = platform !== "youtube";
   const showYoutube = platform !== "twitch";
   const filters = {
@@ -34,6 +35,13 @@ export default async function Creators({ searchParams }: { searchParams: Search 
     ytUploadsMin: showYoutube ? int(sp.ytUploadsMin) : null,
     activeDays: int(sp.activeDays),
     savedOnly: sp.saved === "1",
+    followersMin: showTwitch ? int(sp.followersMin) : null,
+    followersMax: showTwitch ? int(sp.followersMax) : null,
+    followerGrowthMin: showTwitch ? dec(sp.followerGrowthMin) : null,
+    clipsMin: showTwitch ? int(sp.clipsMin) : null,
+    clipViewsMin: showTwitch ? int(sp.clipViewsMin) : null,
+    label: showTwitch && /^(none|[+-]\w+)$/.test(sp.label ?? "") ? sp.label! : "",
+    ytEngagementMin: showYoutube ? dec(sp.ytEngagementMin) : null,
   };
   const [{ rows, total }, opts] = await Promise.all([listCreators(filters), filterOptions()]);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -43,10 +51,13 @@ export default async function Creators({ searchParams }: { searchParams: Search 
         k === "savedOnly" ? (v ? [["saved", "1"]] : []) : v === null || v === "" ? [] : [[k, String(v)]],
       ),
     )}`;
-  const numericSet = [filters.twitchViewersMin, filters.twitchViewersMax, filters.twitchStreamsMin, filters.ytViewsMin, filters.ytViewsMax, filters.ytUploadsMin, filters.activeDays].some((v) => v !== null);
+  const numericSet = [
+    filters.twitchViewersMin, filters.twitchViewersMax, filters.twitchStreamsMin, filters.ytViewsMin, filters.ytViewsMax, filters.ytUploadsMin, filters.activeDays,
+    filters.followersMin, filters.followersMax, filters.followerGrowthMin, filters.clipsMin, filters.clipViewsMin, filters.ytEngagementMin,
+  ].some((v) => v !== null) || filters.label !== "";
   const anyFilter = filters.q || filters.title || filters.lang || numericSet || filters.savedOnly;
-  const numInput = (name: keyof typeof filters, placeholder: string) => (
-    <input name={name} type="number" min={0} inputMode="numeric" placeholder={placeholder} defaultValue={filters[name] === null ? "" : String(filters[name])} className="num-input" />
+  const numInput = (name: keyof typeof filters, placeholder: string, step?: string) => (
+    <input name={name} type="number" min={step ? undefined : 0} step={step} inputMode={step ? "decimal" : "numeric"} placeholder={placeholder} defaultValue={filters[name] === null ? "" : String(filters[name])} className="num-input" />
   );
 
   return (
@@ -54,7 +65,7 @@ export default async function Creators({ searchParams }: { searchParams: Search 
       <h1>Creators</h1>
       <p className="sub">
         Twitch creators seen on a target title, and YouTube channels that passed discovery. Most recently active first.
-        Twitch figures cover the last 7 days on target titles; YouTube figures cover recent uploads.
+        Twitch viewers and streams cover the last 7 days on target titles; followers, clips and labels are refreshed daily. YouTube figures cover recent uploads.
       </p>
 
       <div className="tabs">
@@ -94,6 +105,23 @@ export default async function Creators({ searchParams }: { searchParams: Search 
               <legend>Twitch</legend>
               <label>Avg viewers {numInput("twitchViewersMin", "min")} – {numInput("twitchViewersMax", "max")}</label>
               <label>Streams 7d ≥ {numInput("twitchStreamsMin", "min")}</label>
+              <label>Followers {numInput("followersMin", "min")} – {numInput("followersMax", "max")}</label>
+              <label>Follower growth 7d ≥ {numInput("followerGrowthMin", "%", "0.1")}%</label>
+              <label>Clips 30d ≥ {numInput("clipsMin", "min")}</label>
+              <label>Clip views 30d ≥ {numInput("clipViewsMin", "min")}</label>
+              <label>
+                Content label{" "}
+                <select name="label" defaultValue={filters.label}>
+                  <option value="">Any</option>
+                  <option value="none">No labels</option>
+                  <optgroup label="Has">
+                    {opts.labels.map((l) => <option key={`+${l.label}`} value={`+${l.label}`}>{labelName(l.label)} ({l.n})</option>)}
+                  </optgroup>
+                  <optgroup label="Doesn't have">
+                    {opts.labels.map((l) => <option key={`-${l.label}`} value={`-${l.label}`}>No {labelName(l.label)}</option>)}
+                  </optgroup>
+                </select>
+              </label>
             </fieldset>
           )}
           {showYoutube && (
@@ -101,6 +129,7 @@ export default async function Creators({ searchParams }: { searchParams: Search 
               <legend>YouTube</legend>
               <label>Median views {numInput("ytViewsMin", "min")} – {numInput("ytViewsMax", "max")}</label>
               <label>Uploads 30d ≥ {numInput("ytUploadsMin", "min")}</label>
+              <label>Engagement ≥ {numInput("ytEngagementMin", "%", "0.1")}%</label>
             </fieldset>
           )}
           <button type="submit">Filter</button>
@@ -129,8 +158,12 @@ export default async function Creators({ searchParams }: { searchParams: Search 
                 <th>Titles</th>
                 <th className="num">Twitch avg viewers</th>
                 <th className="num">Twitch streams 7d</th>
+                <th className="num" title="Change over the last 7 days, once a week of daily snapshots exists">Twitch followers</th>
+                <th className="num" title="Clips made of the channel in the last 30 days, and their views">Twitch clips 30d</th>
+                <th>Twitch labels</th>
                 <th className="num">YouTube median views</th>
                 <th className="num">YouTube uploads 30d</th>
+                <th className="num" title="Median (likes + comments) / views per recent upload">YouTube engagement</th>
                 <th>Lang</th>
                 <th>Last active</th>
               </tr>
@@ -171,8 +204,32 @@ function Row({ c }: { c: CreatorRow }) {
       <td>{titles.length ? titles.map((t) => <span key={t} className="chip">{t}</span>) : <span className="muted">—</span>}</td>
       <td className="num">{hasTwitch && c.platform === "twitch" ? num(c.avg_viewers) : <span className="muted">—</span>}</td>
       <td className="num">{hasTwitch && c.platform === "twitch" ? num(c.streams) : <span className="muted">—</span>}</td>
+      <td className="num" style={{ whiteSpace: "nowrap" }}>
+        {c.platform === "twitch" && c.followers !== null ? (
+          <>
+            {num(c.followers)}
+            {c.followers_growth !== null && (
+              <div className={c.followers_growth > 0 ? "up" : c.followers_growth < 0 ? "down" : "muted"} style={{ fontSize: 12 }}>{pct(c.followers_growth, true)} 7d</div>
+            )}
+          </>
+        ) : <span className="muted">—</span>}
+      </td>
+      <td className="num" style={{ whiteSpace: "nowrap" }}>
+        {c.platform === "twitch" && c.clips_30d !== null ? (
+          <>
+            {c.clips_30d >= 500 ? "500+" : num(c.clips_30d)}
+            {c.clips_30d > 0 && <div className="muted" style={{ fontSize: 12 }}>{compact(c.clip_views_30d)} views</div>}
+          </>
+        ) : <span className="muted">—</span>}
+      </td>
+      <td>
+        {c.branded && <span className="chip warn" title="Channel flags branded content">Branded</span>}
+        {(c.labels ?? []).map((l) => <span key={l} className="chip">{labelName(l)}</span>)}
+        {!c.branded && (c.labels ?? []).length === 0 && <span className="muted">—</span>}
+      </td>
       <td className="num">{hasYoutube ? num(c.yt_median_views) : <span className="muted">—</span>}</td>
       <td className="num">{hasYoutube ? num(c.yt_uploads_30d) : <span className="muted">—</span>}</td>
+      <td className="num">{hasYoutube ? pct(c.yt_engagement) : <span className="muted">—</span>}</td>
       <td>{c.language ?? <span className="muted">—</span>}</td>
       <td className="muted">{ago(c.last_active)}</td>
     </tr>

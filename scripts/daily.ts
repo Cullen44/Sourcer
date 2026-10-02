@@ -4,6 +4,7 @@ import { scanTwitchTitles } from "../src/sponsors/twitch-titles";
 import { runPromoSearch } from "../src/sponsors/youtube-promo";
 import { TwitchClient } from "../src/twitch/client";
 import { enrichCreators } from "../src/twitch/enrich";
+import { collectTwitchMetrics } from "../src/twitch/metrics";
 import { BudgetExceeded, QuotaExhausted, YouTubeClient } from "../src/youtube/client";
 import { refreshTracked, searchCandidates, vetCandidates } from "../src/youtube/discover";
 import { linkTwitchCreators } from "../src/youtube/twitch-links";
@@ -54,6 +55,7 @@ async function youtubeStage(name: string, cap: number, fn: () => Promise<unknown
 try {
   await stage("twitch-enrich", () => enrichCreators(db, twitch));
   await stage("twitch-title-scan", () => scanTwitchTitles(db));
+  await stage("twitch-metrics", () => collectTwitchMetrics(db, twitch));
   await youtubeStage("youtube-twitch-links", YOUTUBE_BUDGET.twitchLinks, () => linkTwitchCreators(db, yt));
   await youtubeStage("youtube-promo-search", YOUTUBE_BUDGET.promoSearch, () => runPromoSearch(db, yt));
   await youtubeStage("youtube-discovery-search", YOUTUBE_BUDGET.discoverySearch, () => searchCandidates(db, yt));
