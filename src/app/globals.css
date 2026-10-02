@@ -86,3 +86,13 @@ form.filters button { background: var(--accent); color: #fff; border-color: var(
 .filter-row legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .filter-row label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 form.filters input.num-input { min-width: 0; width: 84px; padding: 4px 8px; }
+.save-form { display: inline; margin: 0; }
+button.star { background: none; border: 0; padding: 0 2px; font-size: 18px; line-height: 1; cursor: pointer; color: var(--muted); }
+button.star.on { color: #eab308; }
+button.star:hover { color: #eab308; }
+label.check { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text); }
+input.note { font: inherit; font-size: 13px; flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.up { color: var(--ok); } .down { color: var(--bad); }
+tr.has-note td { border-bottom: 0; padding-bottom: 2px; }
+.note-form { display: flex; gap: 8px; align-items: center; }
+.note-form button { font: inherit; font-size: 13px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; }

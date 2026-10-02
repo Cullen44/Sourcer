@@ -56,6 +56,7 @@ export interface CreatorRow {
   yt_median_views: number | null;
   yt_uploads_30d: number | null;
   last_active: Date | null;
+  saved: boolean;
 }
 
 export interface CreatorFilters {
@@ -73,6 +74,8 @@ export interface CreatorFilters {
   ytUploadsMin?: number | null;
   /** Active within this many days. */
   activeDays?: number | null;
+  /** Only creators on the watchlist. */
+  savedOnly?: boolean;
 }
 
 export const PAGE_SIZE = 50;
@@ -87,7 +90,8 @@ export async function listCreators(f: CreatorFilters) {
              s.language, c.broadcaster_type, COALESCE(s.streams, 0) AS streams, s.avg_viewers,
              y.channel_id AS yt_channel_id, y.median_views AS yt_median_views, y.uploads_30d AS yt_uploads_30d,
              GREATEST(c.last_seen_at, y.last_upload_at) AS last_active,
-             c.login AS search_a, y.title AS search_b
+             c.login AS search_a, y.title AS search_b,
+             EXISTS (SELECT 1 FROM saved_creators sc WHERE sc.creator_id = c.id) AS saved
       FROM creators c
       LEFT JOIN LATERAL (
         SELECT ARRAY_AGG(DISTINCT g.canonical_title) FILTER (WHERE g.is_target) AS titles,
@@ -106,7 +110,8 @@ export async function listCreators(f: CreatorFilters) {
              CASE WHEN y.primary_title IS NULL THEN '{}'::text[] ELSE ARRAY[y.primary_title] END,
              NULL::text, NULL::text, NULL::int, NULL::int,
              y.channel_id, y.median_views, y.uploads_30d, y.last_upload_at,
-             y.handle, NULL::text
+             y.handle, NULL::text,
+             EXISTS (SELECT 1 FROM saved_creators sc WHERE sc.youtube_channel_id = y.channel_id OR (y.creator_id IS NOT NULL AND sc.creator_id = y.creator_id))
       FROM youtube_channels y LEFT JOIN creators c ON c.id = y.creator_id
       WHERE y.status = 'tracked' AND ($4 = 'youtube' OR y.creator_id IS NULL)
     ),
@@ -125,16 +130,18 @@ export async function listCreators(f: CreatorFilters) {
       AND ($8::int IS NULL OR yt_median_views >= $8::int)
       AND ($9::int IS NULL OR yt_median_views <= $9::int)
       AND ($10::int IS NULL OR yt_uploads_30d >= $10::int)
-      AND ($11::int IS NULL OR last_active >= (now() AT TIME ZONE 'UTC') - make_interval(days => $11::int))`;
+      AND ($11::int IS NULL OR last_active >= (now() AT TIME ZONE 'UTC') - make_interval(days => $11::int))
+      AND (NOT $12::boolean OR saved)`;
   const args = [
     f.q.trim(), f.title, f.lang, f.platform,
     f.twitchViewersMin ?? null, f.twitchViewersMax ?? null, f.twitchStreamsMin ?? null,
     f.ytViewsMin ?? null, f.ytViewsMax ?? null, f.ytUploadsMin ?? null, f.activeDays ?? null,
+    f.savedOnly ?? false,
   ];
 
   const [rows, total] = await Promise.all([
     db.$queryRawUnsafe<CreatorRow[]>(
-      `${union} ORDER BY last_active DESC NULLS LAST, key LIMIT ${PAGE_SIZE} OFFSET $12`,
+      `${union} ORDER BY last_active DESC NULLS LAST, key LIMIT ${PAGE_SIZE} OFFSET $13`,
       ...args,
       (f.page - 1) * PAGE_SIZE,
     ),

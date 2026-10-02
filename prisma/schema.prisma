@@ -50,6 +50,7 @@ model Creator {
   youtubeChannels  YoutubeChannel[]
   scores           CreatorScore[]
   sponsorMentions  SponsorMention[]
+  saved            SavedCreator?
 
   @@index([lastSeenAt])
   @@map("creators")
@@ -148,6 +149,7 @@ model YoutubeChannel {
   creator Creator?              @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   videos  YoutubeVideo[]
   daily   YoutubeChannelDaily[]
+  saved   SavedCreator?
 
   @@index([status])
   @@map("youtube_channels")
@@ -210,6 +212,21 @@ model CreatorScore {
 
   @@index([computedAt, total])
   @@map("creator_scores")
+}
+
+/// The user's watchlist. One row per saved creator: a Twitch creator, or a
+/// YouTube channel that isn't linked to one.
+model SavedCreator {
+  id               Int      @id @default(autoincrement())
+  creatorId        Int?     @unique @map("creator_id")
+  youtubeChannelId String?  @unique @map("youtube_channel_id")
+  note             String?
+  savedAt          DateTime @default(now()) @map("saved_at")
+
+  creator        Creator?        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  youtubeChannel YoutubeChannel? @relation(fields: [youtubeChannelId], references: [channelId], onDelete: Cascade)
+
+  @@map("saved_creators")
 }
 
 // ---------------------------------------------------------------------------

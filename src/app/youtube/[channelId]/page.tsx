@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getYoutubeChannel } from "../../../lib/queries";
+import { isSaved } from "../../../lib/watchlist";
 import { ago, day, num } from "../../format";
+import { SaveButton } from "../../save-button";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +12,13 @@ export default async function ChannelPage({ params }: { params: Promise<{ channe
   const data = await getYoutubeChannel(channelId);
   if (!data) notFound();
   const { channel: c, mentions } = data;
+  const saved = await isSaved({ youtubeChannelId: c.channelId, linkedCreatorId: c.creatorId });
   const statusClass = c.status === "tracked" ? "ok" : c.status === "rejected" ? "bad" : "warn";
 
   return (
     <>
       <p className="sub"><Link href="/creators?platform=youtube">← Creators</Link> · <Link href="/youtube">Discovery</Link></p>
-      <h1>{c.title ?? c.channelId}</h1>
+      <h1 style={{ display: "flex", alignItems: "center", gap: 8 }}>{c.title ?? c.channelId} <SaveButton kind="youtube" id={c.channelId} saved={saved} label /></h1>
       <p className="sub">
         <a href={`https://www.youtube.com/channel/${c.channelId}`} target="_blank" rel="noreferrer">
           youtube.com/{c.handle ?? `channel/${c.channelId}`}

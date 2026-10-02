@@ -13,10 +13,10 @@ The pipeline does deterministic work only (fetch, store, aggregate, score). Judg
 |---|---|---|
 | 0 | Schema, migrations, CI | Done |
 | 1 | Twitch poller + nightly rollup/retention | Live |
-| 2 | Sponsor watch: YouTube promo-code search, Twitch title scan | Done (Meta Ad Library and weekly diff next) |
+| 2 | Sponsor watch: YouTube promo-code search, Twitch title scan, Meta Ad Library (first ~30 ads per advertiser), weekly changes | Done |
 | 3 | Twitch profiles, YouTube links from Twitch bios, YouTube discovery | Done |
 | 4 | Scoring + CSV/Markdown export | Needs ~1 week of data |
-| 5 | Local viewer (browse only, no rankings) | Done |
+| 5 | Local viewer (browse, filter, watchlist; no rankings) | Done |
 
 ## How it runs
 
@@ -43,7 +43,7 @@ Scheduled workflows stay off until the repo variable `POLLER_ENABLED` is `true`.
 
 ## Viewing the data locally
 
-A read-only browser for what's been collected: poller health, creators (search, filter by title and language) with their recent streams, and sponsor mentions. It shows facts, not rankings.
+A browser for what's been collected: poller health, creators across Twitch and YouTube (filter by platform, title, language, viewer and upload numbers, recency), YouTube discovery, sponsor mentions, Meta ads and weekly changes. It shows facts, not rankings. The one thing it writes is the **watchlist**: save creators with ☆, add notes, and monitor them on the Watchlist page (live status, recent numbers vs the week before, latest content, sponsor mentions).
 
 1. Install Node.js 22 from nodejs.org.
 2. Clone the repo and switch to the working branch:

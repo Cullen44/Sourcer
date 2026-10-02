@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCreator } from "../../../lib/queries";
+import { isSaved } from "../../../lib/watchlist";
 import { ago, day, num } from "../../format";
+import { SaveButton } from "../../save-button";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +12,12 @@ export default async function CreatorPage({ params }: { params: Promise<{ id: st
   const data = await getCreator(Number(id));
   if (!data) notFound();
   const { creator: c, games, streams, daily } = data;
+  const saved = await isSaved({ creatorId: c.id });
 
   return (
     <>
       <p className="sub"><Link href="/creators">← Creators</Link></p>
-      <h1>{c.displayName}</h1>
+      <h1 style={{ display: "flex", alignItems: "center", gap: 8 }}>{c.displayName} <SaveButton kind="twitch" id={c.id} saved={saved} label /></h1>
       <p className="sub">
         <a href={`https://twitch.tv/${c.login}`} target="_blank" rel="noreferrer">twitch.tv/{c.login}</a>
         {c.broadcasterType ? ` · ${c.broadcasterType}` : ""} · first seen {ago(c.firstSeenAt)} · last seen on a

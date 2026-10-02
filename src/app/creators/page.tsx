@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { filterOptions, listCreators, PAGE_SIZE, type CreatorRow, type Platform } from "../../lib/queries";
 import { ago, num } from "../format";
+import { SaveButton } from "../save-button";
 
 export const dynamic = "force-dynamic";
 
@@ -32,15 +33,18 @@ export default async function Creators({ searchParams }: { searchParams: Search 
     ytViewsMax: showYoutube ? int(sp.ytViewsMax) : null,
     ytUploadsMin: showYoutube ? int(sp.ytUploadsMin) : null,
     activeDays: int(sp.activeDays),
+    savedOnly: sp.saved === "1",
   };
   const [{ rows, total }, opts] = await Promise.all([listCreators(filters), filterOptions()]);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const href = (over: Partial<typeof filters>) =>
     `/creators?${new URLSearchParams(
-      Object.entries({ ...filters, ...over }).flatMap(([k, v]) => (v === null || v === "" ? [] : [[k, String(v)]])),
+      Object.entries({ ...filters, ...over }).flatMap(([k, v]) =>
+        k === "savedOnly" ? (v ? [["saved", "1"]] : []) : v === null || v === "" ? [] : [[k, String(v)]],
+      ),
     )}`;
   const numericSet = [filters.twitchViewersMin, filters.twitchViewersMax, filters.twitchStreamsMin, filters.ytViewsMin, filters.ytViewsMax, filters.ytUploadsMin, filters.activeDays].some((v) => v !== null);
-  const anyFilter = filters.q || filters.title || filters.lang || numericSet;
+  const anyFilter = filters.q || filters.title || filters.lang || numericSet || filters.savedOnly;
   const numInput = (name: keyof typeof filters, placeholder: string) => (
     <input name={name} type="number" min={0} inputMode="numeric" placeholder={placeholder} defaultValue={filters[name] === null ? "" : String(filters[name])} className="num-input" />
   );
@@ -74,6 +78,9 @@ export default async function Creators({ searchParams }: { searchParams: Search 
             {opts.langs.map((l) => <option key={l.language} value={l.language}>{l.language} ({l.n})</option>)}
           </select>
         )}
+        <label className="check">
+          <input type="checkbox" name="saved" value="1" defaultChecked={filters.savedOnly} /> Saved only
+        </label>
         <select name="activeDays" defaultValue={filters.activeDays === null ? "" : String(filters.activeDays)}>
           <option value="">Active any time</option>
           <option value="1">Active in last day</option>
@@ -116,6 +123,7 @@ export default async function Creators({ searchParams }: { searchParams: Search 
           <table>
             <thead>
               <tr>
+                <th></th>
                 <th>Creator</th>
                 <th>Platforms</th>
                 <th>Titles</th>
@@ -152,6 +160,9 @@ function Row({ c }: { c: CreatorRow }) {
 
   return (
     <tr>
+      <td style={{ width: 28 }}>
+        {c.platform === "twitch" ? <SaveButton kind="twitch" id={c.twitch_id!} saved={c.saved} /> : <SaveButton kind="youtube" id={c.yt_channel_id!} saved={c.saved} />}
+      </td>
       <td><Link href={link}>{c.name}</Link></td>
       <td style={{ whiteSpace: "nowrap" }}>
         {hasTwitch && <Link href={`/creators/${c.twitch_id}`} className="badge twitch">Twitch</Link>}
