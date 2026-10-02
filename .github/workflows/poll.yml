@@ -3,6 +3,8 @@ name: Poll Twitch
 # Scheduled runs only fire on the default branch and can start late or be
 # skipped under load; the rollup credits airtime from real gaps between runs.
 # Disabled until the repo variable POLLER_ENABLED is set to "true".
+# Schedules run as whoever last changed this file's schedule; commits must be
+# attributed to the repo owner (not a bot account) or GitHub creates no runs.
 on:
   schedule:
     # Off the hour: GitHub delays or drops schedules at :00 under load.

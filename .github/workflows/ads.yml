@@ -3,6 +3,8 @@ name: Meta ads
 # Daily: each competitor's active US ads from the public Meta Ad Library.
 # Run manually with "probe" to log the data shape found (field names only).
 # Disabled until POLLER_ENABLED is "true".
+# Schedules run as whoever last changed this file's schedule; commits must be
+# attributed to the repo owner (not a bot account) or GitHub creates no runs.
 on:
   schedule:
     - cron: "37 10 * * *"

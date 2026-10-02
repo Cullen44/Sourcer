@@ -6,6 +6,8 @@ name: Nightly
 #   2. roll up yesterday's Twitch observations, enforce retention
 #   3. Twitch profiles, Twitch title scan, YouTube links / promo search /
 #      discovery / vetting / refresh (each capped to its quota share)
+# Schedules run as whoever last changed this file's schedule; commits must be
+# attributed to the repo owner (not a bot account) or GitHub creates no runs.
 on:
   schedule:
     - cron: "15 8 * * *"
