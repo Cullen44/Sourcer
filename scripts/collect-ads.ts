@@ -11,7 +11,10 @@ const probe = process.argv.includes("--probe");
 const onlyPage = process.argv.find((a) => a.startsWith("--page="))?.slice(7);
 const db = createDb();
 const browser = await chromium.launch();
-let okPages = 0;
+// Any Page that didn't collect cleanly fails the run, so GitHub emails the
+// repo owner: blocked, errored, or "empty" while Meta reports ads (which
+// means the page format changed and the parser found nothing).
+const problems: string[] = [];
 let pages = 0;
 try {
   const competitors = await db.competitor.findMany({ include: { codes: true }, orderBy: { priority: "asc" } });
@@ -22,7 +25,8 @@ try {
       const startedAt = new Date();
       const result = await collectPage(browser, pageId, probe ? console.log : undefined);
       const stored = await storeResult(db, { id: c.id, codes: c.codes.map((x) => x.code) }, pageId, result, startedAt);
-      if (result.status === "ok" || result.status === "empty") okPages++;
+      const genuinelyEmpty = result.status === "empty" && result.reported === 0;
+      if (result.status !== "ok" && !genuinelyEmpty) problems.push(`${c.name} (${pageId}): ${result.status}, ${result.detail}`);
       console.log(
         `${c.name} (${pageId}): ${result.status}${result.complete ? ", complete" : `, first page only (no stops recorded)`}, ${result.ads.length} active ads, ${stored.newAds} new, ` +
           `${stored.stopped} stopped, ${stored.newCodes.length} new codes. ${result.detail}`,
@@ -36,7 +40,7 @@ try {
   await browser.close();
   await db.$disconnect();
 }
-if (pages > 0 && okPages === 0) {
-  console.error("No Page could be collected (all blocked or failed).");
+if (problems.length) {
+  console.error(`\n${problems.length} of ${pages} Pages failed:\n  ${problems.join("\n  ")}`);
   process.exit(1);
 }

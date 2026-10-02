@@ -347,3 +347,26 @@ export async function adSummary() {
     }),
   );
 }
+
+/**
+ * Health of the Meta ad collector: the latest run of every configured Page.
+ * "ok" only when each Page's latest run was clean and recent.
+ */
+export async function adCollectorHealth(staleHours = 36) {
+  const competitors = await db.competitor.findMany({ where: { fbPageIds: { isEmpty: false } } });
+  const latest = (
+    await Promise.all(
+      competitors.flatMap((c) =>
+        c.fbPageIds.map(async (pageId) => ({
+          competitor: c.name,
+          run: await db.adCollectionRun.findFirst({ where: { competitorId: c.id, pageId }, orderBy: { startedAt: "desc" } }),
+        })),
+      ),
+    )
+  );
+  const staleBefore = Date.now() - staleHours * 3_600_000;
+  const failed = latest.filter((l) => !l.run || (l.run.status !== "ok" && !(l.run.status === "empty" && l.run.reportedCount === 0)));
+  const stale = latest.filter((l) => l.run && l.run.startedAt.getTime() < staleBefore);
+  const lastRun = latest.map((l) => l.run?.startedAt).filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+  return { pages: latest.length, failed, stale, lastRun, ok: latest.length > 0 && failed.length === 0 && stale.length === 0 };
+}

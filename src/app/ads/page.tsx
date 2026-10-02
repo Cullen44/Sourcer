@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 type Search = Promise<Record<string, string | undefined>>;
 
-const RUN_LABEL: Record<string, string> = { ok: "ok", empty: "no ads found", blocked: "blocked by Meta", error: "failed" };
+const RUN_LABEL: Record<string, string> = { ok: "ok", empty: "no ads found", blocked: "⚠ blocked by Meta", error: "⚠ failed" };
 
 export default async function Ads({ searchParams }: { searchParams: Search }) {
   const sp = await searchParams;
@@ -40,7 +40,7 @@ export default async function Ads({ searchParams }: { searchParams: Search }) {
                 <td className="num">{s.reported === null ? <span className="muted">—</span> : `~${num(s.reported)}`}</td>
                 <td className="num">{num(s.newThisWeek)}</td>
                 <td className="num">{s.allComplete ? num(s.stoppedThisWeek) : <span className="muted" title="Only part of this advertiser's ads are visible, so stops can't be told apart from ads that didn't load">not tracked</span>}</td>
-                <td className={s.lastRun?.status === "ok" ? "muted" : s.lastRun ? "warn" : "muted"}>
+                <td className={s.lastRun?.status === "ok" ? "muted" : s.lastRun ? "bad" : "muted"} title={s.lastRun?.detail ?? undefined}>
                   {s.lastRun ? `${RUN_LABEL[s.lastRun.status] ?? s.lastRun.status}, ${ago(s.lastRun.startedAt)}` : "never"}
                 </td>
               </tr>

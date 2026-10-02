@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { getOverview, getYoutubeOverview } from "../lib/queries";
+import { adCollectorHealth, getOverview, getYoutubeOverview } from "../lib/queries";
 import { ago, num } from "./format";
 
 export const dynamic = "force-dynamic";
 
 export default async function Overview() {
-  const [o, yt] = await Promise.all([getOverview(), getYoutubeOverview()]);
+  const [o, yt, ads] = await Promise.all([getOverview(), getYoutubeOverview(), adCollectorHealth()]);
   const minsSinceOk = o.lastOk ? (Date.now() - o.lastOk.startedAt.getTime()) / 60_000 : Infinity;
   // Scheduled runs drift; treat up to ~1h as normal, beyond that as stalled.
   const health = minsSinceOk <= 45 ? "ok" : minsSinceOk <= 90 ? "warn" : "bad";
@@ -21,6 +21,17 @@ export default async function Overview() {
           <div className="label">Poller</div>
           <div className={`value ${health}`}>{healthText}</div>
           <div className="note">last successful poll {ago(o.lastOk?.startedAt)}</div>
+        </div>
+        <div className="card">
+          <div className="label">Meta ads</div>
+          <div className={`value ${ads.pages === 0 ? "" : ads.ok ? "ok" : "bad"}`}>
+            {ads.pages === 0 ? "Not set up" : ads.failed.length ? "Failing" : ads.stale.length ? "Stalled" : "OK"}
+          </div>
+          <div className="note">
+            {ads.failed.length
+              ? `${ads.failed.map((f) => f.competitor).join(", ")}: ${ads.failed[0]?.run?.status ?? "never collected"}`
+              : `last collected ${ago(ads.lastRun)}`}
+          </div>
         </div>
         <div className="card">
           <div className="label">Polls, last 24h</div>
