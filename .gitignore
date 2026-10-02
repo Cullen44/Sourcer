@@ -8,3 +8,7 @@ exports/
 .next/
 *.log
 *.tsbuildinfo
+
+# Written by `next dev` on each start
+AGENTS.md
+CLAUDE.md
