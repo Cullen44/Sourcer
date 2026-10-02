@@ -96,3 +96,7 @@ input.note { font: inherit; font-size: 13px; flex: 1; min-width: 0; padding: 4px
 tr.has-note td { border-bottom: 0; padding-bottom: 2px; }
 .note-form { display: flex; gap: 8px; align-items: center; }
 .note-form button { font: inherit; font-size: 13px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; }
+.note-box.ok { color: var(--ok); }
+.note-box.bad { color: var(--bad); }
+button.run-btn { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+button.run-btn:disabled { background: var(--chip); border-color: var(--border); color: var(--muted); cursor: not-allowed; }

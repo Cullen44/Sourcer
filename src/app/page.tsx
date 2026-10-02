@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { adCollectorHealth, getOverview, getYoutubeOverview } from "../lib/queries";
 import { ago, num } from "./format";
+import { RunPanel } from "./run-panel";
 
 export const dynamic = "force-dynamic";
 
-export default async function Overview() {
+export default async function Overview({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const sp = await searchParams;
   const [o, yt, ads] = await Promise.all([getOverview(), getYoutubeOverview(), adCollectorHealth()]);
   const minsSinceOk = o.lastOk ? (Date.now() - o.lastOk.startedAt.getTime()) / 60_000 : Infinity;
   // Scheduled runs drift; treat up to ~1h as normal, beyond that as stalled.
@@ -68,6 +70,9 @@ export default async function Overview() {
           <pre className="note-box" style={{ whiteSpace: "pre-wrap" }}>{o.lastRun.error.split("\n")[0]}</pre>
         </>
       )}
+
+      <h2>Jobs</h2>
+      <RunPanel ran={sp.ran} runErr={sp.runerr} />
 
       <h2>Live in the latest poll</h2>
       <div className="table-wrap">

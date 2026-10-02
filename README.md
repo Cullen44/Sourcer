@@ -65,6 +65,8 @@ A browser for what's been collected: poller health, creators across Twitch and Y
 
 `.env` is git-ignored, so the password never gets committed.
 
+**Run now buttons (optional).** The Overview's Jobs panel can start Poll Twitch, Nightly and Meta ads on GitHub. Create a fine-grained token at github.com/settings/personal-access-tokens/new (repository access: only this repo; permissions: Actions → Read and write), add `GITHUB_TOKEN="…"` to `.env`, and restart the viewer. Each job has a cooldown (polls 5 min, Nightly and Meta ads 60 min) and can't be started while already running. The viewer only listens on your own computer (127.0.0.1), so nobody else on your network can press the buttons or edit the watchlist.
+
 To update later: stop the viewer (Ctrl+C), then `git pull`, `npm ci`, `npm run dev`. Use `npm ci` rather than `npm install`: it installs exactly what `package-lock.json` lists without rewriting it, so a later `git pull` isn't blocked by local lockfile changes. `npm run dev` regenerates the database client on every start, and clears the `.next` cache when the schema changed, so a pulled schema change can't leave the viewer out of date.
 
 If `git pull` ever says local changes to `package-lock.json` would be overwritten, discard them with `git checkout -- package-lock.json` and pull again.
