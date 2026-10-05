@@ -10,5 +10,5 @@ exports/
 *.tsbuildinfo
 
 # Written by `next dev` on each start
-AGENTS.md
-CLAUDE.md
+/AGENTS.md
+/CLAUDE.md
