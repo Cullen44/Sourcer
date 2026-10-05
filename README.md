@@ -31,6 +31,22 @@ GitHub Actions, no server:
 
 Scheduled workflows stay off until the repo variable `POLLER_ENABLED` is `true`.
 
+### Scheduling from Supabase
+
+GitHub's own cron starts runs late or skips them (16 of ~216 polls ran over one weekend). Supabase starts them on time instead: `pg_cron` calls GitHub's "run workflow" API, and runs started that way begin promptly.
+
+1. Create a fine-grained token at github.com/settings/personal-access-tokens/new. Under repository access, pick only this repo. Under permissions, set Actions to Read and write. Note its expiry date: when it expires, runs stop (the Overview's Poller card goes Stalled). The same token can be `GITHUB_TOKEN` in `.env` for the Run now buttons.
+2. In Supabase → SQL Editor, store it (replace the placeholder, run, then clear the editor):
+   ```sql
+   select vault.create_secret('github_pat_…', 'github_dispatch_token', 'Starts Sourcer workflows');
+   ```
+3. Paste the contents of `supabase/scheduler.sql` into a new query and run it.
+4. Test: run `select private.dispatch_workflow('poll.yml');`, wait a few seconds, then
+   `select status_code, content from net._http_response order by created desc limit 5;`
+   You want `204`, and a new Poll Twitch run under Actions. A `401` means the token is wrong or expired. A `404` means it lacks Actions access to this repo.
+
+Once runs arrive on schedule, the `schedule:` blocks come out of `poll.yml`, `nightly.yml` and `ads.yml` (keep `workflow_dispatch`).
+
 ## Going live
 
 1. **Supabase**: create a project. Under Connect, copy the pooled URL (port 6543, append `?pgbouncer=true`) and the direct URL (port 5432).

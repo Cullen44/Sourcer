@@ -167,26 +167,27 @@ Underdog 100653998267239 · PrizePicks 2026200897655629 · DraftKings/FanDuel no
 - **GitHub's scheduler is unreliable**: 16 polls in ~3 days instead of ~216;
   Nightly started 9 hours late; Ads skipped a day. Fix: external cron (below).
 
-## Scheduling: moving off GitHub's cron (owner's to-do)
+## Scheduling: moving off GitHub's cron (in progress)
 
-1. Create a fine-grained GitHub token (repo: Sourcer only; permission Actions → Read
-   and write). Reuse it as `GITHUB_TOKEN` in `.env` for the Run now buttons.
-2. At cron-job.org, create one job per workflow:
-   - URL `https://api.github.com/repos/Cullen44/Sourcer/actions/workflows/<file>/dispatches`
-   - Method POST. Headers: `Authorization: Bearer <token>`,
-     `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`,
-     `Content-Type: application/json`
-   - Body `{"ref":"claude/brave-heisenberg-0ktvvq"}`. Success is HTTP 204.
-   - `poll.yml` every 20 min (minutes 7,27,47); `nightly.yml` daily 08:15 UTC;
-     `ads.yml` daily 10:37 UTC.
-3. Once runs show up as `workflow_dispatch` in Actions, delete the `schedule:`
-   blocks from the three workflows (keep `workflow_dispatch`) so runs don't double.
-   Commit as Cullen44.
-4. If the repo goes private (2,000 free minutes/month; each run bills whole minutes):
-   polling every 20 min ≈ 2,160 min/month for polls alone, which is over. Every 30 min
-   (≈1,440 + nightly ~450 + ads ~90 ≈ 1,980) is borderline; **hourly** (≈720 + 540)
-   is safe. Whatever cadence is chosen, set `POLL_INTERVAL_MINUTES` to match
-   (nightly.yml env and `.env`). The owner hasn't chosen yet.
+Decision (2026-10-05): **stay public; schedule from Supabase** with pg_cron + pg_net
+calling GitHub's workflow_dispatch API. The setup is `supabase/scheduler.sql` (not a
+Prisma migration: CI's plain Postgres lacks those extensions). The token lives in
+Supabase Vault as `github_dispatch_token`. The owner's steps are in README → "Scheduling
+from Supabase".
+
+- Status: script written and pushed; **the owner has not run it yet.**
+- Next step after the owner confirms runs arrive as `workflow_dispatch` on time: delete
+  the `schedule:` blocks from poll.yml, nightly.yml, ads.yml (keep `workflow_dispatch`
+  and the `POLLER_ENABLED` gate) and commit as Cullen44. Until then, GitHub's cron
+  stays as a backup; duplicate runs are harmless (concurrency groups, idempotent stages,
+  YouTube spend tracked per day).
+- Debugging: `net._http_response` (204 ok, 401 token, 404 access) and
+  `cron.job_run_details`.
+- Alternatives considered: cron-job.org (works, but needs a third-party account),
+  moving the poll into a Supabase Edge Function (only needed if the repo goes private,
+  because of GitHub's 2,000 free minutes; polling every 20 min costs ~2,160 min/month).
+- If cadence ever changes, keep `POLL_INTERVAL_MINUTES` (nightly.yml env, `.env`) equal
+  to the poll spacing.
 
 ## Open items / offered, not built
 
