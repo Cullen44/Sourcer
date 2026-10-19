@@ -154,15 +154,30 @@ The old `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` secrets are unused and can be 
 - **Meta: first ~30 ads per Page** (pagination is rate-limited); identical ads grouped.
 - **Scheduling via Supabase pg_cron**, repo stays public (free Actions minutes).
 
-## State as of 2026-10-19
+## State as of 2026-10-19 (end of day)
 
-- Fresh start: the pivot migration applies (and wipes) on the next Nightly.
-- FB Page IDs (2026-10-19): Boba Charge 1148994618304224 · ChargePoint 59788879399 ·
-  EVmatch 1599619566964007.
-- **Owner to re-run `supabase/scheduler.sql`** in Supabase. It unschedules the retired
-  `sourcer-poll` job, which otherwise keeps dispatching the deleted `poll.yml` (harmless 404s).
+- **Pivot is live.** Nightly ran by hand at 16:17 UTC: the pivot migration wiped the
+  old data, competitors were seeded, and the first run did:
+  - competitor search: 4 searches, 39 mentions, 1 new code;
+  - discovery: 12 searches, 313 candidates;
+  - vetting: 22 admitted (of 25/day), 314 rejected;
+  - YouTube units that day: 5,419 (including the earlier scheduled run).
+- **Meta ads working** for all three Pages (FB Page IDs: Boba Charge
+  1148994618304224 · ChargePoint 59788879399 · EVmatch 1599619566964007). Results:
+  Boba Charge 6 ads, ChargePoint 4, both complete. EVmatch runs no ads; the
+  collector reads Meta's "no ads" message as 0 (a clean, complete run, not a
+  failure). If a Page ever shows neither ads nor a count, the log quotes the page's
+  wording so `reportedResultCount` in `src/ads/parse.ts` can be extended.
+- `ads.yml` seeds competitors itself, so Page IDs added to config are collected
+  on its next run without waiting for Nightly.
+- **Owner's to-do:** run `select cron.unschedule('sourcer-poll');` in Supabase. The
+  retired poll job keeps dispatching the deleted `poll.yml` (harmless 404s) until then.
+  Re-running `supabase/scheduler.sql` does the same.
+- The owner runs the viewer on Windows from `C:\Users\Cullw\Sourcer`
+  (PowerShell; `git pull`, `npm ci`, `npm run dev`).
 - Discovery thresholds are first guesses for a smaller niche than gaming; tune after
-  a week (look at rejected reasons on the Discovery page).
+  a week (look at rejected reasons on the Discovery page). Most of the first 314
+  rejections were off-topic.
 
 ## Open items / ideas, not built
 
