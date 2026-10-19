@@ -1,5 +1,5 @@
 import { requireEnv } from "../env";
-import type { FetchLike } from "../twitch/client";
+export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
 const API = "https://www.googleapis.com/youtube/v3";
 
@@ -53,8 +53,6 @@ export interface SearchOptions {
   publishedAfter?: Date;
   maxResults?: number;
   order?: "date" | "relevance" | "viewCount";
-  live?: boolean;
-  gamingOnly?: boolean;
   regionCode?: string;
   relevanceLanguage?: string;
 }
@@ -105,8 +103,6 @@ export class YouTubeClient {
       order: opts.order ?? "date",
       maxResults: String(opts.maxResults ?? 25),
       ...(opts.publishedAfter ? { publishedAfter: opts.publishedAfter.toISOString() } : {}),
-      ...(opts.live ? { eventType: "live" } : {}),
-      ...(opts.gamingOnly ? { videoCategoryId: "20" } : {}),
       ...(opts.regionCode ? { regionCode: opts.regionCode } : {}),
       ...(opts.relevanceLanguage ? { relevanceLanguage: opts.relevanceLanguage } : {}),
     });

@@ -8,7 +8,7 @@ const [channel] = await yt.channels(["UC_x5XG1OV2P6uZZ5FSM9Ttw"]); // Google for
 if (!channel) throw new Error("Key works but the channel lookup returned nothing");
 console.log(`Key OK: channels.list returned "${channel.snippet.title}"`);
 
-const query = process.env.CHECK_QUERY || '"Kalshi" promo code';
+const query = process.env.CHECK_QUERY || 'airbnb EV charger';
 const since = new Date(Date.now() - 30 * 86_400_000);
 const results = await yt.search(query, { publishedAfter: since, maxResults: 15 });
 const videos = await yt.videos(results.flatMap((r) => (r.id.videoId ? [r.id.videoId] : [])));

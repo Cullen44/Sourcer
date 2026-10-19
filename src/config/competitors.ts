@@ -1,9 +1,9 @@
 /**
- * Sponsor-watch list. Priority 1 = direct comps (regulatory/positioning or
- * closest audience). fbPageIds are the Facebook Pages whose ads are collected
- * from the Meta Ad Library: in the Ad Library, pick the advertiser from the
- * search dropdown and copy view_all_page_id from the URL. A brand can run
- * ads from several Pages (sportsbook, casino, fantasy); list each one.
+ * Sponsor-watch list. Priority 1 = direct comps. fbPageIds are the Facebook
+ * Pages whose ads are collected from the Meta Ad Library: in the Ad Library,
+ * pick the advertiser from the search dropdown and copy view_all_page_id from
+ * the URL. searchQueries are the nightly YouTube searches for videos that
+ * mention the brand (100 units each).
  */
 export interface CompetitorSeed {
   name: string;
@@ -11,15 +11,14 @@ export interface CompetitorSeed {
   fbPageIds: string[];
   domains: string[];
   knownCodes: string[];
+  searchQueries: string[];
 }
 
 export const COMPETITORS: CompetitorSeed[] = [
   // The home brand, tracked the same way as a baseline for the competitors.
-  { name: "1v1Me", priority: 1, fbPageIds: ["104528351230896"], domains: ["1v1me.com"], knownCodes: [] },
-  { name: "Kalshi", priority: 1, fbPageIds: ["108107432370909"], domains: ["kalshi.com"], knownCodes: ["2KSIGNUP"] },
-  { name: "Polymarket", priority: 1, fbPageIds: ["101309195074880"], domains: ["polymarket.com", "poly2016.com"], knownCodes: ["2016"] },
-  { name: "Underdog Fantasy", priority: 1, fbPageIds: ["100653998267239"], domains: ["underdogfantasy.com"], knownCodes: [] },
-  { name: "PrizePicks", priority: 2, fbPageIds: ["2026200897655629"], domains: ["prizepicks.com"], knownCodes: [] },
-  { name: "DraftKings", priority: 2, fbPageIds: [], domains: ["draftkings.com"], knownCodes: [] },
-  { name: "FanDuel", priority: 2, fbPageIds: [], domains: ["fanduel.com"], knownCodes: [] },
+  { name: "Boba Charge", priority: 1, fbPageIds: [], domains: ["bobacharge.com"], knownCodes: [], searchQueries: ['"Boba Charge"'] },
+  // Airbnb's official charger partner for hosts.
+  { name: "ChargePoint", priority: 1, fbPageIds: [], domains: ["chargepoint.com"], knownCodes: [], searchQueries: ["ChargePoint airbnb", "ChargePoint home charger"] },
+  // Peer-to-peer charger sharing; hosts can rent their charger out.
+  { name: "EVmatch", priority: 1, fbPageIds: [], domains: ["evmatch.com"], knownCodes: [], searchQueries: ['"EVmatch"'] },
 ];

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getYoutubeChannel } from "../../../lib/queries";
 import { isSaved } from "../../../lib/watchlist";
 import { ago, day, num, pct } from "../../format";
+import { TOPICS, type Topic } from "../../../config/topics";
 import { SaveButton } from "../../save-button";
 
 export const dynamic = "force-dynamic";
@@ -12,26 +13,25 @@ export default async function ChannelPage({ params }: { params: Promise<{ channe
   const data = await getYoutubeChannel(channelId);
   if (!data) notFound();
   const { channel: c, mentions } = data;
-  const saved = await isSaved({ youtubeChannelId: c.channelId, linkedCreatorId: c.creatorId });
+  const saved = await isSaved(c.channelId);
   const statusClass = c.status === "tracked" ? "ok" : c.status === "rejected" ? "bad" : "warn";
 
   return (
     <>
-      <p className="sub"><Link href="/creators?platform=youtube">← Creators</Link> · <Link href="/youtube">Discovery</Link></p>
-      <h1 style={{ display: "flex", alignItems: "center", gap: 8 }}>{c.title ?? c.channelId} <SaveButton kind="youtube" id={c.channelId} saved={saved} label /></h1>
+      <p className="sub"><Link href="/creators">← Creators</Link> · <Link href="/youtube">Discovery</Link></p>
+      <h1 style={{ display: "flex", alignItems: "center", gap: 8 }}>{c.title ?? c.channelId} <SaveButton id={c.channelId} saved={saved} label /></h1>
       <p className="sub">
         <a href={`https://www.youtube.com/channel/${c.channelId}`} target="_blank" rel="noreferrer">
           youtube.com/{c.handle ?? `channel/${c.channelId}`}
         </a>
         {" · "}<span className={statusClass}>{c.status}</span>
         {c.rejectReason ? ` (${c.rejectReason})` : ""}
-        {c.creator && <> · Twitch: <Link href={`/creators/${c.creator.id}`}>{c.creator.displayName}</Link></>}
         {c.country ? ` · ${c.country}` : ""}
       </p>
 
       <div className="cards">
-        <div className="card"><div className="label">Main title</div><div className="value" style={{ fontSize: 18 }}>{c.primaryTitle ?? "—"}</div>
-          <div className="note">{c.titleShare === null ? "" : `${Math.round(c.titleShare * 100)}% of recent uploads on target titles`}</div></div>
+        <div className="card"><div className="label">Short-term rentals</div><div className="value">{pct(c.strShare)}</div><div className="note">of recent uploads</div></div>
+        <div className="card"><div className="label">EVs</div><div className={`value ${c.evShare ? "ok" : ""}`}>{pct(c.evShare)}</div><div className="note">of recent uploads mention EVs</div></div>
         <div className="card"><div className="label">Median views</div><div className="value">{num(c.medianViews)}</div><div className="note">recent uploads</div></div>
         <div className="card"><div className="label">Engagement</div><div className="value">{pct(c.engagementRate)}</div><div className="note">median (likes + comments) / views</div></div>
         <div className="card"><div className="label">Uploads, 30 days</div><div className="value">{num(c.uploads30d)}</div><div className="note">last {ago(c.lastUploadAt)}</div></div>
@@ -70,7 +70,7 @@ export default async function ChannelPage({ params }: { params: Promise<{ channe
                 <tr key={v.videoId}>
                   <td className="muted" style={{ whiteSpace: "nowrap" }}>{day(v.publishedAt)}</td>
                   <td><a href={`https://www.youtube.com/watch?v=${v.videoId}`} target="_blank" rel="noreferrer">{v.title}</a></td>
-                  <td>{v.canonicalTitle ? <span className="chip">{v.canonicalTitle}</span> : <span className="muted">other</span>}</td>
+                  <td>{v.topics.length ? v.topics.map((t) => <span key={t} className="chip">{TOPICS[t as Topic] ?? t}</span>) : <span className="muted">other</span>}</td>
                   <td className="num muted">{v.durationSeconds === null ? "—" : fmtDuration(v.durationSeconds)}</td>
                   <td className="num">{num(v.viewCount)}</td>
                   <td className="num">{v.likeCount === null ? <span className="muted" title="Hidden by the channel, or not fetched yet">—</span> : num(v.likeCount)}</td>

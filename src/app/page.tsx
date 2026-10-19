@@ -8,21 +8,35 @@ export const dynamic = "force-dynamic";
 export default async function Overview({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const [o, yt, ads] = await Promise.all([getOverview(), getYoutubeOverview(), adCollectorHealth()]);
-  const minsSinceOk = o.lastOk ? (Date.now() - o.lastOk.startedAt.getTime()) / 60_000 : Infinity;
-  // Scheduled runs drift; treat up to ~1h as normal, beyond that as stalled.
-  const health = minsSinceOk <= 45 ? "ok" : minsSinceOk <= 90 ? "warn" : "bad";
-  const healthText = { ok: "Running", warn: "Late", bad: "Stalled" }[health];
 
   return (
     <>
       <h1>Overview</h1>
-      <p className="sub">Data collection status. Nothing here is ranked or scored.</p>
+      <p className="sub">
+        Creator sourcing for Boba Charge: YouTube channels about hosting short-term rentals, with EV coverage as a bonus.
+        Nothing here is ranked or scored.
+      </p>
 
       <div className="cards">
         <div className="card">
-          <div className="label">Poller</div>
-          <div className={`value ${health}`}>{healthText}</div>
-          <div className="note">last successful poll {ago(o.lastOk?.startedAt)}</div>
+          <div className="label">Tracked channels</div>
+          <div className="value">{num(o.channels)}</div>
+          <div className="note">{num(o.new24h)} added in last 24h</div>
+        </div>
+        <div className="card">
+          <div className="label">Cover EVs</div>
+          <div className="value">{num(o.ev)}</div>
+          <div className="note"><Link href="/creators?ev=ev">browse →</Link></div>
+        </div>
+        <div className="card">
+          <div className="label">Discovery queue</div>
+          <div className="value">{num(yt.counts.candidate ?? 0)}</div>
+          <div className="note">waiting · {num(yt.counts.rejected ?? 0)} rejected · {num(yt.unitsToday)} / 10,000 units today</div>
+        </div>
+        <div className="card">
+          <div className="label">Competitor mentions</div>
+          <div className="value">{num(o.mentions)}</div>
+          <div className="note">across {o.competitors} brands</div>
         </div>
         <div className="card">
           <div className="label">Meta ads</div>
@@ -30,71 +44,17 @@ export default async function Overview({ searchParams }: { searchParams: Promise
             {ads.pages === 0 ? "Not set up" : ads.failed.length ? "Failing" : ads.stale.length ? "Stalled" : "OK"}
           </div>
           <div className="note">
-            {ads.failed.length
-              ? `${ads.failed.map((f) => f.competitor).join(", ")}: ${ads.failed[0]?.run?.status ?? "never collected"}`
-              : `last collected ${ago(ads.lastRun)}`}
+            {ads.pages === 0
+              ? "add Facebook Page IDs in src/config/competitors.ts"
+              : ads.failed.length
+                ? `${ads.failed.map((f) => f.competitor).join(", ")}: ${ads.failed[0]?.run?.status ?? "never collected"}`
+                : `last collected ${ago(ads.lastRun)}`}
           </div>
-        </div>
-        <div className="card">
-          <div className="label">Polls, last 24h</div>
-          <div className="value">{o.runs24h}</div>
-          <div className={`note ${o.failed24h ? "bad" : ""}`}>{o.failed24h} failed · ~72 expected</div>
-        </div>
-        <div className="card">
-          <div className="label">Creators found</div>
-          <div className="value">{num(o.creators)}</div>
-          <div className="note">{num(o.newCreators24h)} new in last 24h</div>
-        </div>
-        <div className="card">
-          <div className="label">Stream readings</div>
-          <div className="value">{num(o.observations)}</div>
-          <div className="note">raw, last 7 days</div>
-        </div>
-        <div className="card">
-          <div className="label">YouTube channels</div>
-          <div className="value">{num(yt.counts.tracked ?? 0)}</div>
-          <div className="note">
-            tracked · {num(yt.counts.rejected ?? 0)} rejected · {num(yt.counts.candidate ?? 0)} waiting · {num(yt.unitsToday)} / 10,000 units today
-          </div>
-        </div>
-        <div className="card">
-          <div className="label">Sponsor mentions</div>
-          <div className="value">{num(o.mentions)}</div>
-          <div className="note">across {o.competitors} competitors</div>
         </div>
       </div>
-
-      {o.lastRun?.error && (
-        <>
-          <h2 className="bad">Latest poll failed ({ago(o.lastRun.startedAt)})</h2>
-          <pre className="note-box" style={{ whiteSpace: "pre-wrap" }}>{o.lastRun.error.split("\n")[0]}</pre>
-        </>
-      )}
 
       <h2>Jobs</h2>
       <RunPanel ran={sp.ran} runErr={sp.runerr} />
-
-      <h2>Live in the latest poll</h2>
-      <div className="table-wrap">
-        {o.byTitle.length === 0 ? (
-          <div className="empty">No completed polls yet.</div>
-        ) : (
-          <table>
-            <thead>
-              <tr><th>Title</th><th className="num">Streams</th><th></th></tr>
-            </thead>
-            <tbody>
-              {o.byTitle.map((t) => (
-                <tr key={t.title}>
-                  <td>{t.title}</td>
-                  <td className="num">{num(t.streams)}</td>
-                  <td><Link href={`/creators?platform=twitch&title=${encodeURIComponent(t.title)}`}>Browse creators →</Link></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
     </>
   );
 }

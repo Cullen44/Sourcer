@@ -1,5 +1,5 @@
 import type { Db } from "../db";
-import { TARGET_TITLES } from "../config/games";
+import { DISCOVERY_QUERIES } from "../config/topics";
 import { DISCOVERY } from "../config/youtube";
 import type { YouTubeClient } from "./client";
 import { syncChannels } from "./sync";
@@ -8,7 +8,7 @@ import { vet } from "./vetting";
 const DAY = 86_400_000;
 
 /**
- * Stage 1: one recent-uploads search and one live search per target title.
+ * Stage 1: one recent-uploads search per discovery query (config/topics.ts).
  * Every channel that appears becomes a candidate; nothing is tracked yet.
  * Rejected channels are only re-opened if they reappear after revetAfterDays.
  */
@@ -18,44 +18,40 @@ export async function searchCandidates(db: Db, yt: YouTubeClient, now = new Date
   let reopened = 0;
   const publishedAfter = new Date(now.getTime() - DISCOVERY.publishedWithinDays * DAY);
 
-  for (const t of TARGET_TITLES) {
-    for (const live of [false, true]) {
-      const items = await yt.search(t.youtubeQuery, {
-        live,
-        publishedAfter: live ? undefined : publishedAfter,
-        order: live ? "viewCount" : "relevance",
-        maxResults: 50,
-        gamingOnly: true,
-        regionCode: DISCOVERY.regionCode,
-        relevanceLanguage: DISCOVERY.relevanceLanguage,
-      });
-      searches++;
+  for (const query of DISCOVERY_QUERIES) {
+    const items = await yt.search(query, {
+      publishedAfter,
+      order: "relevance",
+      maxResults: 50,
+      regionCode: DISCOVERY.regionCode,
+      relevanceLanguage: DISCOVERY.relevanceLanguage,
+    });
+    searches++;
 
-      const seen = new Map(items.map((i) => [i.snippet.channelId, i.snippet.channelTitle]));
-      const ids = [...seen.keys()];
-      const existing = await db.youtubeChannel.findMany({ where: { channelId: { in: ids } } });
-      const known = new Set(existing.map((e) => e.channelId));
+    const seen = new Map(items.map((i) => [i.snippet.channelId, i.snippet.channelTitle]));
+    const ids = [...seen.keys()];
+    const existing = await db.youtubeChannel.findMany({ where: { channelId: { in: ids } } });
+    const known = new Set(existing.map((e) => e.channelId));
 
-      const created = await db.youtubeChannel.createMany({
-        data: ids.filter((id) => !known.has(id)).map((id) => ({
-          channelId: id,
-          title: seen.get(id),
-          source: "discovery",
-          status: "candidate",
-          lastSeenInSearch: now,
-        })),
-        skipDuplicates: true,
-      });
-      newCandidates += created.count;
+    const created = await db.youtubeChannel.createMany({
+      data: ids.filter((id) => !known.has(id)).map((id) => ({
+        channelId: id,
+        title: seen.get(id),
+        source: "discovery",
+        status: "candidate",
+        lastSeenInSearch: now,
+      })),
+      skipDuplicates: true,
+    });
+    newCandidates += created.count;
 
-      await db.youtubeChannel.updateMany({ where: { channelId: { in: [...known] } }, data: { lastSeenInSearch: now } });
-      const revetBefore = new Date(now.getTime() - DISCOVERY.revetAfterDays * DAY);
-      const r = await db.youtubeChannel.updateMany({
-        where: { channelId: { in: [...known] }, status: "rejected", vettedAt: { lt: revetBefore }, NOT: { rejectReason: "channel unavailable" } },
-        data: { status: "candidate" },
-      });
-      reopened += r.count;
-    }
+    await db.youtubeChannel.updateMany({ where: { channelId: { in: [...known] } }, data: { lastSeenInSearch: now } });
+    const revetBefore = new Date(now.getTime() - DISCOVERY.revetAfterDays * DAY);
+    const r = await db.youtubeChannel.updateMany({
+      where: { channelId: { in: [...known] }, status: "rejected", vettedAt: { lt: revetBefore }, NOT: { rejectReason: "channel unavailable" } },
+      data: { status: "candidate" },
+    });
+    reopened += r.count;
   }
   return { searches, newCandidates, reopened };
 }
@@ -68,8 +64,8 @@ export async function searchCandidates(db: Db, yt: YouTubeClient, now = new Date
 export async function vetCandidates(db: Db, yt: YouTubeClient, now = new Date()) {
   const startOfDay = new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
   const [tracked, admittedToday] = await Promise.all([
-    db.youtubeChannel.count({ where: { status: "tracked", source: { not: "twitch_link" } } }),
-    db.youtubeChannel.count({ where: { status: "tracked", source: { not: "twitch_link" }, vettedAt: { gte: startOfDay } } }),
+    db.youtubeChannel.count({ where: { status: "tracked" } }),
+    db.youtubeChannel.count({ where: { status: "tracked", vettedAt: { gte: startOfDay } } }),
   ]);
   let slots = Math.min(DISCOVERY.maxNewPerDay - admittedToday, DISCOVERY.maxTracked - tracked);
   let admitted = 0;

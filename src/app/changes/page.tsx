@@ -79,16 +79,11 @@ export default async function Changes({ searchParams }: { searchParams: Search }
             {c.newCreators.length > 0 && (
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Creator newly seen</th><th>Where</th><th>Code</th><th>Video / stream</th><th className="num">Views</th></tr></thead>
+                  <thead><tr><th>Creator newly seen</th><th>Code</th><th>Video</th><th className="num">Views</th></tr></thead>
                   <tbody>
                     {c.newCreators.map((m) => (
                       <tr key={m.id}>
-                        <td>
-                          {m.platform === "youtube"
-                            ? <Link href={`/youtube/${m.externalChannelId}`}>{m.channelTitle ?? m.externalChannelId}</Link>
-                            : m.creatorId ? <Link href={`/creators/${m.creatorId}`}>{m.channelTitle}</Link> : m.channelTitle}
-                        </td>
-                        <td className="muted">{m.platform === "youtube" ? "YouTube" : "Twitch"}</td>
+                        <td><Link href={`/youtube/${m.externalChannelId}`}>{m.channelTitle ?? m.externalChannelId}</Link></td>
                         <td>{m.promoCode ? <span className="chip">{m.promoCode}</span> : "—"}</td>
                         <td><a href={m.url} target="_blank" rel="noreferrer">{m.title ?? m.url}</a></td>
                         <td className="num">{num(m.viewCount)}</td>

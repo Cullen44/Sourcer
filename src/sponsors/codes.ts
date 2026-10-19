@@ -12,25 +12,22 @@ export interface CompetitorRef {
 
 /** Extra spellings people use for each competitor, beyond its name and domains. */
 const ALIASES: Record<string, string[]> = {
-  PrizePicks: ["prize picks"],
-  DraftKings: ["draft kings"],
-  FanDuel: ["fan duel"],
+  "Boba Charge": ["bobacharge"],
+  EVmatch: ["ev match"],
 };
 
 /**
- * Everyday words that only count as a brand mention next to promo language
- * ("underdog run" is a stream title; "Underdog promo code" is a sponsor).
+ * Generic phrases that only count as a brand mention next to promo language
+ * ("a charge point in the garage" is generic; "ChargePoint discount code" is
+ * the brand). The brand's own spelling and domain always count.
  */
 const WEAK_ALIASES: Record<string, string[]> = {
-  "Underdog Fantasy": ["underdog"],
+  ChargePoint: ["charge point"],
 };
-const PROMO_CONTEXT = /\b(promo|code|sign ?up|deposit|bonus|referral|sponsor(ed)?|#ad)\b/i;
+const PROMO_CONTEXT = /\b(promo|code|discount|coupon|sign ?up|bonus|referral|affiliate|partner(ed)?|sponsor(ed)?|#ad)\b/i;
 
-/**
- * Brand names that are also common phrases ("1v1 me" is gamer talk). They
- * count only next to promo language; their domains always count.
- */
-const WEAK_NAMES = new Set(["1v1Me"]);
+/** Brand names that are also common phrases; none at present. */
+const WEAK_NAMES = new Set<string>();
 
 /** Words that follow "code" in prose but are not codes. */
 const NOT_CODES = new Set([

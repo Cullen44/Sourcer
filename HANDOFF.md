@@ -5,20 +5,27 @@ the conventions it depends on, decisions already made with the owner, and
 what's open. `README.md` covers setup steps for humans; this file covers
 context for whoever works on the code next.
 
-Last updated: 2026-10-05.
+Last updated: 2026-10-19.
 
 ## What it is
 
-Two tools for 1v1Me (a CoD wager platform; the owner works there), sharing one
-Supabase Postgres database:
+Creator sourcing and competitor watch for **Boba Charge** (bobacharge.com): a
+Buffalo-area startup selling residential-style EV chargers with built-in QR-code
+payment, aimed at short-term-rental hosts (guests scan, pay, charge; hosts set
+pricing in a free owner app; ~$600). Two tools share one Supabase Postgres DB:
 
-1. **Creator sourcing**: find competitive-gaming creators on Twitch and YouTube
-   for Call of Duty, NBA 2K, EA FC, Madden, Counter-Strike, Tekken and Street Fighter.
-2. **Competitor sponsor watch**: which creators Kalshi, Polymarket, Underdog,
-   PrizePicks, DraftKings and FanDuel work with, their promo codes, and their
-   Meta ads. 1v1Me itself is tracked as a baseline.
+1. **Creator sourcing** (YouTube only): channels whose uploads are about
+   hosting short-term rentals (Airbnb, VRBO, co-hosting). Covering or owning
+   EVs is the preferred extra, measured as `ev_share`, but it isn't required.
+2. **Competitor watch**: YouTube videos mentioning ChargePoint (Airbnb's
+   official charger partner for hosts) or EVmatch (peer-to-peer charger
+   sharing), with Boba Charge itself as a baseline; promo codes; Meta ads.
 
-Original spec (Claude Doc): https://claude.ai/code/artifact/9b4624c6-8871-4a36-8097-3cfa0d8a35b4
+**History:** until 2026-10-19 this repo sourced competitive-gaming creators on
+Twitch and YouTube for 1v1Me and watched Kalshi/Polymarket/PrizePicks/etc. The
+owner pivoted it. Migration `20261019000000_bobacharge_pivot` dropped every
+Twitch table and **wiped all sourcing, sponsor and ad data, at the owner's
+request, with no backup**. Twitch code was removed. Git history has it if ever needed.
 
 The pipeline is deterministic (fetch, store, aggregate). Judgment happens in
 Claude conversations, not in code.
@@ -32,8 +39,8 @@ Claude conversations, not in code.
 - Next.js 16.3 viewer (App Router, server components, server actions). This
   Next version differs from older training data; check
   `node_modules/next/dist/docs/` when unsure.
-- Jobs run in GitHub Actions. There is no server. The viewer runs only on the
-  owner's computer (`npm run dev`, bound to 127.0.0.1).
+- Jobs run in GitHub Actions, started by Supabase pg_cron. There is no server. The
+  viewer runs only on the owner's computer (`npm run dev`, bound to 127.0.0.1).
 - Repo: github.com/Cullen44/Sourcer (public). Working/default branch:
   `claude/brave-heisenberg-0ktvvq`.
 
@@ -41,63 +48,63 @@ Claude conversations, not in code.
 
 ```
 prisma/schema.prisma, prisma/migrations/   schema + hand-checked migrations
-src/config/      games.ts (target titles, Twitch/YouTube matching), youtube.ts (quota
-                 budgets, discovery filters), competitors.ts (brands, FB Page IDs, codes)
-src/twitch/      client.ts (Helix, app token, rate-limit pacing), enrich.ts (profiles),
-                 metrics.ts (daily followers/clips/labels)
-src/poll.ts      one Twitch sweep;  src/rollup.ts  nightly rollup + 7-day retention
+src/config/      topics.ts (STR + EV patterns, discovery queries), youtube.ts (quota
+                 budgets, discovery filters), competitors.ts (brands, FB Page IDs,
+                 domains, codes, mention search queries)
 src/youtube/     client.ts (quota-aware), vetting.ts (metrics + filters), sync.ts,
-                 discover.ts (search → vet → refresh), twitch-links.ts, usage.ts
-src/sponsors/    codes.ts (brand/code matching), youtube-promo.ts, twitch-titles.ts
+                 discover.ts (search → vet → refresh), usage.ts
+src/sponsors/    codes.ts (brand/code matching), youtube-promo.ts (competitor search)
 src/ads/         Meta Ad Library: collect.ts (Playwright), parse.ts, store.ts, group.ts
 src/report/      changes.ts (weekly changes → Markdown)
 src/lib/         viewer data: queries.ts, watchlist.ts, jobs.ts (Run now buttons), db.ts
-src/app/         viewer pages: / (overview), creators, creators/[id], watchlist,
-                 youtube (discovery), youtube/[channelId], sponsors, ads, changes
-scripts/         entry points: poll, rollup, daily, collect-ads, seed-*, report, predev.mjs
+src/app/         viewer pages: / (overview), creators, watchlist, youtube (discovery),
+                 youtube/[channelId], sponsors, ads, changes
+scripts/         entry points: daily, collect-ads, seed-competitors, report, predev.mjs
+supabase/        scheduler.sql (pg_cron → workflow_dispatch; run by hand in Supabase)
 test/            vitest; DB tests need TEST_DATABASE_URL
-.github/workflows/  poll, nightly, ads, setup-db, ci, youtube-check
+.github/workflows/  nightly, ads, setup-db, ci, youtube-check
 ```
 
 ## How data flows
 
 | Workflow | Schedule (UTC) | Does |
 |---|---|---|
-| `poll.yml` | :07/:27/:47 | Live streams per target Twitch category down to `VIEWER_FLOOR` (20), plus every creator seen on a target title in 30 days, in any category. Writes `poll_runs`, `stream_observations`, `creators`. ~35 s. |
-| `nightly.yml` | 08:15 | `db:deploy` (migrations), `rollup` (→ `creator_daily`, deletes observations > 7 days), then `npm run daily`. ~15 min. |
-| `ads.yml` | 10:37 | Playwright scrapes the Meta Ad Library for each FB Page. ~2 min. |
-| `setup-db.yml` | manual | Migrations + seed games and competitors. |
+| `nightly.yml` | 08:15 | `db:deploy`, `competitors:seed` (config → DB), `npm run daily`. |
+| `ads.yml` | 10:37 | Meta Ad Library, first ~30 ads per FB Page. No-op until Page IDs exist. |
+| `setup-db.yml` | manual | Migrations + competitor seed (fresh DB only). |
 | `ci.yml` | push | typecheck, migrate, tests, build. |
 
-All scheduled workflows are gated on the repo variable `POLLER_ENABLED == 'true'`.
+Supabase pg_cron dispatches nightly and ads on time (`supabase/scheduler.sql`);
+the `schedule:` blocks in the workflows are a backup. All gated on repo variable
+`POLLER_ENABLED == 'true'`.
 
-`npm run daily` stages (each isolated; one failing doesn't stop the others; the process exits 1 if any failed):
-1. `twitch-enrich`: profiles for new creators.
-2. `twitch-title-scan`: competitor names and codes in stream titles.
-3. `twitch-metrics`: once per creator per day, for creators seen in 30 days.
-   Followers (`/channels/followers` total, which works with an app token), clips
-   in 30 days and their views (≤ 5 pages), content classification labels, and
-   the branded-content flag. Snapshot in `creator_twitch_daily`. About 2.2 requests per creator.
-4. YouTube stages, each capped to a share of the 10,000 units/day (ceiling 8,000; quota day
-   = Pacific time; spend tracked in `youtube_usage`): twitch-links, promo-search,
-   discovery-search, vetting, refresh (tracked channels, which also stores likes/comments
-   → `engagement_rate`).
+`npm run daily`: YouTube stages, each capped to a share of the 10,000 units/day
+(ceiling 8,000; quota day = Pacific; spend in `youtube_usage`), isolated so one
+failing doesn't stop the rest (exit 1 if any failed):
+1. `youtube-promo-search`: each competitor's `searchQueries` (config), then known
+   codes oldest-searched first. Mentions → `sponsor_mentions`; new codes →
+   `promo_codes`; channels → candidates (source `sponsor`).
+2. `youtube-discovery-search`: one search per `DISCOVERY_QUERIES` entry (12 × 100 units),
+   US/English, last 14 days. Channels → candidates (source `discovery`).
+3. `youtube-vetting`: candidate → tracked/rejected. Filters (`DISCOVERY`):
+   `str_share` ≥ 30%, ≥ 2 uploads in 30 days, median views 300–250k; ≤ 25 new a
+   day, ≤ 400 total; rejected re-vetted only if seen again after 30 days.
+4. `youtube-refresh`: tracked channels once a day: uploads, likes/comments →
+   `engagement_rate`, `str_share`, `ev_share`, daily snapshot.
 
-YouTube discovery is a funnel so it can't flood the DB: candidate → vetted →
-tracked or rejected. The filters: at least 50% of recent uploads on target titles,
-4+ uploads in 30 days, median views between 1k and 250k, at most 25 new channels a
-day and 400 in total. Rejected channels are only re-vetted after 30 days.
+Topic matching (`config/topics.ts`): STR on **title + tags only** (descriptions
+carry "book my Airbnb" boilerplate); EV on **title + tags + description** (gear
+lists and "my Tesla" are real EV signals). Videos store `topics` (`STR`, `EV`).
 
-Meta: only the first ~30 ads per Page are visible (pagination is rate-limited). The
-collector reads Meta's "~N results" count; ads are marked stopped only when a run
-was complete. Any Page problem fails the run, which makes GitHub email the owner.
+Brand matching (`sponsors/codes.ts`): name, domain and aliases ("bobacharge",
+"ev match") always count; "charge point" (generic phrase) only next to promo
+language.
 
 ## Conventions (things that break if ignored)
 
 - **Commit as the repo owner.** `user.name "Cullen44"`,
   `user.email "273448091+Cullen44@users.noreply.github.com"`. GitHub only runs a
-  scheduled workflow as whoever last changed it. Commits attributed to another
-  account (this happened once with a "claude" account) silently stopped all schedules.
+  scheduled workflow as whoever last changed it.
 - **No `.js` extensions in imports.** Turbopack (viewer) and tsx (scripts) both
   resolve extensionless paths; `.js` breaks Turbopack.
 - **Migrations**: never `prisma migrate reset` or `migrate dev` against a real DB.
@@ -113,98 +120,59 @@ was complete. Any Page problem fails the run, which makes GitHub email the owner
 - **Tests** use a separate database (`TEST_DATABASE_URL`, e.g. `sourcer_test`). DB
   tests TRUNCATE tables, so never point them at real data.
 - **Viewer is read-only** except the watchlist (`saved_creators`) and the Run now
-  buttons. It shows facts and no rankings (owner's choice; see below).
-- `npm run dev` runs `scripts/predev.mjs` first: it regenerates the Prisma client
-  and clears `.next` when the schema changed. Tell the owner to update with
-  `git pull && npm ci && npm run dev`, using `npm ci` rather than `npm install`
-  so the lockfile isn't rewritten and later pulls don't get blocked.
-- `next dev` writes `AGENTS.md`/`CLAUDE.md` in the repo root. They're
-  git-ignored on purpose; don't commit them.
-- Commit trailer used so far:
-  `Co-Authored-By: Claude <noreply@anthropic.com>`.
+  buttons. It shows facts and no rankings (owner's choice).
+- `npm run dev` runs `scripts/predev.mjs` first (regenerates the Prisma client,
+  clears `.next` on schema change). The owner updates with
+  `git pull && npm ci && npm run dev`.
+- `next dev`/`next build` write `AGENTS.md`/`CLAUDE.md` in the repo root and may
+  touch `next-env.d.ts`. Root copies are git-ignored; restore `next-env.d.ts`
+  before committing.
+- Commit trailer: `Co-Authored-By: Claude <noreply@anthropic.com>`.
 
 ## Environment
 
 `.env` (git-ignored); see `.env.example`.
 - `DATABASE_URL`: Supabase pooler, port 6543, `?pgbouncer=true`. The viewer only needs this.
 - `DIRECT_URL`: port 5432, for migrations.
-- `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET`, `YOUTUBE_API_KEY`.
-- `GITHUB_TOKEN` (optional, viewer only): fine-grained, this repo, Actions read/write;
-  enables the Run now buttons. The owner hasn't created it yet.
-- `VIEWER_FLOOR` (20), `POLL_INTERVAL_MINUTES` (20; must match the real poll
-  cadence, because hours streamed cap each gap at 2× this).
+- `YOUTUBE_API_KEY`.
+- `GITHUB_TOKEN` (optional, viewer only): the same fine-grained token as the scheduler.
 
 The same values are GitHub Actions secrets. `POLLER_ENABLED` is a repo variable.
+The old `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` secrets are unused and can be deleted.
 
 ## Decisions made with the owner
 
-- **No rankings in the viewer.** Scoring (spec phase 4) may exist in the
-  pipeline and exports, but the viewer only browses and filters.
-- **YouTube without the flood**: the discovery funnel above, not "all gaming creators".
-- Creators page: All / Twitch / YouTube tabs; **every column filterable**.
-  Twitch creators with a tracked YouTube channel are one merged row.
-- **Meta: first 30 ads per brand** accepted, despite the rate limit. Identical ads
-  are grouped ("×4 variants").
-- **Watchlist**: ☆ save, notes, live status and week-over-week change.
-- **1v1Me is tracked** like a competitor (FB Page 104528351230896); weak name
-  ("1v1 me" is gamer talk), so it only counts next to promo language.
-- **Audience metrics, 1 per creator per day**: Twitch followers (+7-day growth),
-  clips in 30 days and their views, content labels, branded flag; YouTube engagement
-  (median (likes+comments)/views).
-- Repo is public (free Actions minutes). The owner may go private later; see "Scheduling".
+- **YouTube only.** Instagram/TikTok have no public discovery API; the owner
+  chose YouTube only over adding IG/TikTok by hand.
+- **Targets**: STR/Airbnb host creators; EV coverage or ownership preferred,
+  not required. The Creators page sorts EV coverage first and has All / Cover EVs /
+  No EV content tabs.
+- **Competitors**: ChargePoint and EVmatch (owner's picks), plus Boba Charge
+  itself. Others the owner didn't pick: Tesla Wall Connector, Wallbox.
+- **Old data cleared, no backup** (owner's explicit choice).
+- **No rankings in the viewer**; every column filterable.
+- **Meta: first ~30 ads per Page** (pagination is rate-limited); identical ads grouped.
+- **Scheduling via Supabase pg_cron**, repo stays public (free Actions minutes).
 
-## IDs
+## State as of 2026-10-19
 
-FB Pages: 1v1Me 104528351230896 · Kalshi 108107432370909 · Polymarket 101309195074880 ·
-Underdog 100653998267239 · PrizePicks 2026200897655629 · DraftKings/FanDuel none yet.
+- Fresh start: the pivot migration applies (and wipes) on the next Nightly.
+- **Facebook Page IDs for ChargePoint, EVmatch and Boba Charge are not set.**
+  The owner needs to find them (Ad Library → pick advertiser → copy `view_all_page_id`).
+  Until then Meta ads stay "Not set up".
+- **Owner to re-run `supabase/scheduler.sql`** in Supabase. It unschedules the retired
+  `sourcer-poll` job, which otherwise keeps dispatching the deleted `poll.yml` (harmless 404s).
+- Discovery thresholds are first guesses for a smaller niche than gaming; tune after
+  a week (look at rejected reasons on the Discovery page).
 
-## State as of 2026-10-05
+## Open items / ideas, not built
 
-- ~2,400 Twitch creators in the 30-day window; all have audience metrics.
-- 25 tracked YouTube channels, 500+ candidates waiting (the 25/day cap makes the backlog drain slowly).
-- ~220+ sponsor mentions. Meta: ~30 ads collected per brand; Meta reports
-  ~360 (1v1Me), ~470 (Kalshi), ~45 (Polymarket), ~49 (Underdog), ~480 (PrizePicks).
-- **GitHub's scheduler is unreliable**: 16 polls in ~3 days instead of ~216;
-  Nightly started 9 hours late; Ads skipped a day. Fix: external cron (below).
-
-## Scheduling: moving off GitHub's cron (in progress)
-
-Decision (2026-10-05): **stay public; schedule from Supabase** with pg_cron + pg_net
-calling GitHub's workflow_dispatch API. The setup is `supabase/scheduler.sql` (not a
-Prisma migration: CI's plain Postgres lacks those extensions). The token lives in
-Supabase Vault as `github_dispatch_token`. The owner's steps are in README → "Scheduling
-from Supabase".
-
-- Status: script written and pushed; **the owner has not run it yet.**
-- Next step after the owner confirms runs arrive as `workflow_dispatch` on time: delete
-  the `schedule:` blocks from poll.yml, nightly.yml, ads.yml (keep `workflow_dispatch`
-  and the `POLLER_ENABLED` gate) and commit as Cullen44. Until then, GitHub's cron
-  stays as a backup; duplicate runs are harmless (concurrency groups, idempotent stages,
-  YouTube spend tracked per day).
-- Debugging: `net._http_response` (204 ok, 401 token, 404 access) and
-  `cron.job_run_details`.
-- Alternatives considered: cron-job.org (works, but needs a third-party account),
-  moving the poll into a Supabase Edge Function (only needed if the repo goes private,
-  because of GitHub's 2,000 free minutes; polling every 20 min costs ~2,160 min/month).
-- If cadence ever changes, keep `POLL_INTERVAL_MINUTES` (nightly.yml env, `.env`) equal
-  to the poll spacing.
-
-## Open items / offered, not built
-
-- Store Twitch `broadcaster_language` from `/channels` (already fetched in
-  `twitch/metrics.ts`) so the language filter works for creators who didn't stream in
-  the last 7 days, and show names instead of codes. Offered; awaiting a yes.
-- Kick support (official API: live streams by category, channel profiles; probably no
-  followers or clips). Needs a Kick dev app → `KICK_CLIENT_ID`/`SECRET`. Needs a platform
-  column on creators. Offered; awaiting a yes.
-- Daily history of the Twitch branded-content flag. Offered.
-- Compact label display on Creators rows (4 labels stack tall); maybe hide
-  "Mature game" (auto-applied to every CoD/CS stream). Offered.
-- Promo-code quality gate: only search a newly seen code after 2+ sightings (the first
-  promo search added ~86 codes, some likely junk; the owner hasn't reviewed them).
-- Twitch bio → YouTube links found 0 of 773 so far; worth a look at `extractYoutubeRef`.
-- Label 1v1Me as the home brand on the Sponsors page.
-- Spec phase 4: scoring + CSV/Markdown export for Claude review (needs ~1 week of data).
+- Referral vs paid tagging of mentions (YouTube `paidProductPlacementDetails`
+  flag, "#ad"/"sponsored" language) was proposed before the pivot. It may matter
+  less for chargers, which rarely have referral codes.
+- Look up FB Page IDs once the owner provides them; add to `config/competitors.ts`.
+- Possibly more competitors (Tesla Wall Connector, Wallbox, Emporia) if the owner asks.
+- Scoring + CSV/Markdown export for Claude review (needs ~1 week of data).
 
 ## Local verification
 
@@ -214,6 +182,6 @@ npm run typecheck
 TEST_DATABASE_URL=postgresql://…/sourcer_test npm test   # separate, disposable DB
 npm run dev                                               # viewer at 127.0.0.1:3000
 ```
-Don't run `npm run poll`/`daily`/`ads` locally against the production DB unless the
-owner asks: they spend Twitch/YouTube quota and write real data. Trigger the GitHub
+Don't run `npm run daily`/`ads` locally against the production DB unless the
+owner asks: they spend YouTube quota and write real data. Trigger the GitHub
 workflow instead.

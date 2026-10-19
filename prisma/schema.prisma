@@ -8,146 +8,15 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
-// Sourcing
+// Sourcing: YouTube creators who host short-term rentals, ideally covering EVs
 // ---------------------------------------------------------------------------
 
-/// Twitch categories. Target titles carry a canonicalTitle so yearly entries
-/// (Call of Duty, EA FC, 2K, Madden) count as one logical title. Non-target
-/// games are recorded too, from tracked creators' off-target streams, so that
-/// relevance (share of streaming on target titles) can be computed.
-model Game {
-  id             Int      @id @default(autoincrement())
-  twitchGameId   String   @unique @map("twitch_game_id")
-  name           String
-  canonicalTitle String?  @map("canonical_title")
-  isTarget       Boolean  @default(false) @map("is_target")
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  observations StreamObservation[]
-  daily        CreatorDaily[]
-
-  @@map("games")
-}
-
-model Creator {
-  id               Int       @id @default(autoincrement())
-  twitchUserId     String    @unique @map("twitch_user_id")
-  login            String
-  displayName      String    @map("display_name")
-  description      String?
-  broadcasterType  String?   @map("broadcaster_type")
-  profileImageUrl  String?   @map("profile_image_url")
-  totalViews       BigInt?   @map("total_views")
-  youtubeChannelId String?   @map("youtube_channel_id")
-  firstSeenAt      DateTime  @default(now()) @map("first_seen_at")
-  lastSeenAt       DateTime  @default(now()) @map("last_seen_at")
-  enrichedAt       DateTime? @map("enriched_at")
-  /// When the bio was last checked for a YouTube link (found or not).
-  youtubeCheckedAt DateTime? @map("youtube_checked_at")
-  /// Audience metrics, refreshed once a day (history in creator_twitch_daily).
-  followers        Int?
-  /// Clips made of the channel in the last 30 days (counted up to 500), and their views.
-  clips30d         Int?      @map("clips_30d")
-  clipViews30d     Int?      @map("clip_views_30d")
-  /// Twitch content classification labels on the channel (Gambling, MatureGame, ...).
-  contentLabels    String[]  @default([]) @map("content_labels")
-  /// The channel is flagged as carrying branded (sponsored) content.
-  brandedContent   Boolean?  @map("branded_content")
-  metricsAt        DateTime? @map("metrics_at")
-
-  observations     StreamObservation[]
-  daily            CreatorDaily[]
-  youtubeChannels  YoutubeChannel[]
-  scores           CreatorScore[]
-  sponsorMentions  SponsorMention[]
-  saved            SavedCreator?
-  twitchDaily      CreatorTwitchDaily[]
-
-  @@index([lastSeenAt])
-  @@map("creators")
-}
-
-/// One row per poller sweep. Observations reference their sweep so the rollup
-/// can credit airtime from the real gap between sweeps (scheduled runs drift).
-model PollRun {
-  id          Int       @id @default(autoincrement())
-  startedAt   DateTime  @default(now()) @map("started_at")
-  finishedAt  DateTime? @map("finished_at")
-  streamsSeen Int       @default(0) @map("streams_seen")
-  requests    Int       @default(0)
-  error       String?
-
-  observations StreamObservation[]
-
-  @@index([startedAt])
-  @@map("poll_runs")
-}
-
-/// Raw poll results. Retained for 7 days, then rolled up and deleted.
-model StreamObservation {
-  id          BigInt   @id @default(autoincrement())
-  pollRunId   Int      @map("poll_run_id")
-  creatorId   Int      @map("creator_id")
-  gameId      Int      @map("game_id")
-  streamId    String   @map("stream_id")
-  viewerCount Int      @map("viewer_count")
-  title       String
-  language    String
-  startedAt   DateTime @map("started_at")
-  observedAt  DateTime @map("observed_at")
-
-  pollRun PollRun @relation(fields: [pollRunId], references: [id], onDelete: Cascade)
-  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  game    Game    @relation(fields: [gameId], references: [id])
-
-  @@unique([pollRunId, streamId])
-  @@index([observedAt])
-  @@index([creatorId, observedAt])
-  @@map("stream_observations")
-}
-
-/// Rolled-up aggregates per creator, per game, per UTC day. Kept forever.
-model CreatorDaily {
-  creatorId     Int      @map("creator_id")
-  gameId        Int      @map("game_id")
-  date          DateTime @db.Date
-  avgCcv        Float    @map("avg_ccv")
-  peakCcv       Int      @map("peak_ccv")
-  hoursStreamed Float    @map("hours_streamed")
-  sessions      Int
-  lastTitle     String?  @map("last_title")
-  language      String?
-
-  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  game    Game    @relation(fields: [gameId], references: [id])
-
-  @@id([creatorId, gameId, date])
-  @@index([date])
-  @@map("creator_daily")
-}
-
-/// Daily audience snapshot per Twitch creator, so follower growth can be read.
-model CreatorTwitchDaily {
-  creatorId    Int      @map("creator_id")
-  date         DateTime @db.Date
-  followers    Int?
-  clips30d     Int?     @map("clips_30d")
-  clipViews30d Int?     @map("clip_views_30d")
-
-  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-
-  @@id([creatorId, date])
-  @@map("creator_twitch_daily")
-}
-
-/// A YouTube channel, from one of three sources:
-///   twitch_link: linked from a Twitch creator's profile (always tracked)
-///   discovery:   found by title searches; must pass the vetting filters
-///   sponsor:     found carrying a competitor's name or code (not vetted)
+/// A YouTube channel, from one of two sources:
+///   discovery: found by topic searches; must pass the vetting filters
+///   sponsor:   found mentioning a competitor (vetted like any other)
 /// status: candidate (not yet vetted) | tracked | rejected (rejectReason says why)
 model YoutubeChannel {
   id                Int       @id @default(autoincrement())
-  creatorId         Int?      @map("creator_id")
   channelId         String    @unique @map("channel_id")
   title             String?
   handle            String?
@@ -159,10 +28,10 @@ model YoutubeChannel {
   totalViews        BigInt?   @map("total_views")
   videoCount        Int?      @map("video_count")
   uploadsPlaylistId String?   @map("uploads_playlist_id")
-  /// Canonical target title most of its recent uploads are about.
-  primaryTitle      String?   @map("primary_title")
-  /// Share of recent uploads that are about any target title (0-1).
-  titleShare        Float?    @map("title_share")
+  /// Share of recent uploads about short-term rentals (Airbnb, VRBO, hosting) (0-1).
+  strShare          Float?    @map("str_share")
+  /// Share of recent uploads that mention electric vehicles or EV charging (0-1).
+  evShare           Float?    @map("ev_share")
   medianViews       Int?      @map("median_views")
   /// Median (likes + comments) / views over recent uploads (0-1).
   engagementRate    Float?    @map("engagement_rate")
@@ -173,7 +42,6 @@ model YoutubeChannel {
   vettedAt          DateTime? @map("vetted_at")
   fetchedAt         DateTime  @default(now()) @map("fetched_at")
 
-  creator Creator?              @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   videos  YoutubeVideo[]
   daily   YoutubeChannelDaily[]
   saved   SavedCreator?
@@ -193,8 +61,8 @@ model YoutubeVideo {
   likeCount       BigInt?  @map("like_count")
   commentCount    BigInt?  @map("comment_count")
   durationSeconds Int?     @map("duration_seconds")
-  /// Canonical target title this video is about, if any.
-  canonicalTitle  String?  @map("canonical_title")
+  /// Topics this video covers: "STR", "EV".
+  topics          String[] @default([])
   fetchedAt       DateTime @default(now()) @map("fetched_at")
 
   channel YoutubeChannel @relation(fields: [channelId], references: [channelId], onDelete: Cascade)
@@ -226,36 +94,14 @@ model YoutubeUsage {
   @@map("youtube_usage")
 }
 
-/// Recomputed nightly; history kept so rank movement can be shown.
-model CreatorScore {
-  id             Int      @id @default(autoincrement())
-  creatorId      Int      @map("creator_id")
-  computedAt     DateTime @default(now()) @map("computed_at")
-  relevance      Float
-  trajectory     Float
-  consistency    Float
-  scale          Float
-  sponsorDensity Float    @map("sponsor_density")
-  total          Float
-  reasons        Json?
-
-  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-
-  @@index([computedAt, total])
-  @@map("creator_scores")
-}
-
-/// The user's watchlist. One row per saved creator: a Twitch creator, or a
-/// YouTube channel that isn't linked to one.
+/// The user's watchlist: saved YouTube channels.
 model SavedCreator {
   id               Int      @id @default(autoincrement())
-  creatorId        Int?     @unique @map("creator_id")
-  youtubeChannelId String?  @unique @map("youtube_channel_id")
+  youtubeChannelId String   @unique @map("youtube_channel_id")
   note             String?
   savedAt          DateTime @default(now()) @map("saved_at")
 
-  creator        Creator?        @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  youtubeChannel YoutubeChannel? @relation(fields: [youtubeChannelId], references: [channelId], onDelete: Cascade)
+  youtubeChannel YoutubeChannel @relation(fields: [youtubeChannelId], references: [channelId], onDelete: Cascade)
 
   @@map("saved_creators")
 }
@@ -349,13 +195,11 @@ model AdCollectionRun {
   @@map("ad_collection_runs")
 }
 
-/// creatorId is nullable on purpose: most creators found through a promo code
-/// are not in `creators` yet. Backfilled when the sourcing pipeline finds them.
+/// A video mentioning a competitor. externalChannelId is the YouTube channel.
 model SponsorMention {
   id                Int      @id @default(autoincrement())
   competitorId      Int      @map("competitor_id")
   platform          String
-  creatorId         Int?     @map("creator_id")
   externalChannelId String    @map("external_channel_id")
   channelTitle      String?   @map("channel_title")
   url               String
@@ -366,7 +210,6 @@ model SponsorMention {
   observedAt        DateTime  @default(now()) @map("observed_at")
 
   competitor Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
-  creator    Creator?   @relation(fields: [creatorId], references: [id], onDelete: SetNull)
 
   @@unique([competitorId, url])
   @@index([externalChannelId])

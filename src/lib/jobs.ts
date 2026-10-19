@@ -13,8 +13,7 @@ export interface Job {
 }
 
 export const JOBS: Job[] = [
-  { file: "poll.yml", label: "Poll Twitch", cooldownMin: 5, what: "Live streams on the 7 titles, plus followed creators" },
-  { file: "nightly.yml", label: "Nightly", cooldownMin: 60, what: "Rollup, Twitch profiles, YouTube search, discovery and refresh (uses YouTube quota)" },
+  { file: "nightly.yml", label: "Nightly", cooldownMin: 60, what: "YouTube competitor search, discovery, vetting and refresh (uses YouTube quota)" },
   { file: "ads.yml", label: "Meta ads", cooldownMin: 60, what: "Competitors' active ads from the Meta Ad Library" },
 ];
 

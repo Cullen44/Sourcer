@@ -1,7 +1,7 @@
 import { COMPETITORS } from "../src/config/competitors";
 import { createDb } from "../src/db";
 
-// Upsert the watch list. Never removes a Page ID, domain or code already in
+// Upsert the watch list (runs in every Nightly, so config changes apply). Never removes a Page ID, domain or code already in
 // the database; values added later (by hand or by the pipeline) are kept.
 const db = createDb();
 try {
@@ -12,7 +12,7 @@ try {
     const fbPageIds = [...new Set([...(existing?.fbPageIds ?? []), ...c.fbPageIds])];
     const row = await db.competitor.upsert({
       where: { name: c.name },
-      create: { ...c, knownCodes, domains, fbPageIds },
+      create: { name: c.name, priority: c.priority, knownCodes, domains, fbPageIds },
       update: { priority: c.priority, knownCodes, domains, fbPageIds },
     });
     await db.promoCode.createMany({

@@ -14,10 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:deploy": "prisma migrate deploy",
-    "games:seed": "tsx scripts/seed-games.ts",
     "competitors:seed": "tsx scripts/seed-competitors.ts",
-    "poll": "tsx scripts/poll.ts",
-    "rollup": "tsx scripts/rollup.ts",
     "daily": "tsx scripts/daily.ts",
     "ads": "tsx scripts/collect-ads.ts",
     "report": "tsx scripts/report.ts"

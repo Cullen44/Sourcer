@@ -39,13 +39,13 @@ $$;
 revoke all on function private.dispatch_workflow(text) from public;
 
 -- Times are UTC. Scheduling an existing job name replaces its schedule.
--- Keep POLL_INTERVAL_MINUTES (nightly.yml, .env) equal to the poll spacing.
-select cron.schedule('sourcer-poll',    '7,27,47 * * * *', $$select private.dispatch_workflow('poll.yml')$$);
+-- The Twitch poll was retired with the move to YouTube-only sourcing.
+select cron.unschedule(jobid) from cron.job where jobname = 'sourcer-poll';
 select cron.schedule('sourcer-nightly', '15 8 * * *',      $$select private.dispatch_workflow('nightly.yml')$$);
 select cron.schedule('sourcer-ads',     '37 10 * * *',     $$select private.dispatch_workflow('ads.yml')$$);
 
 -- Checking it works:
---   select private.dispatch_workflow('poll.yml');   -- start a poll now
+--   select private.dispatch_workflow('nightly.yml');   -- start a Nightly now
 --   select status_code, content, created from net._http_response order by created desc limit 5;
 --     204 = GitHub accepted it. 401 = bad/expired token. 404 = token lacks Actions access to the repo.
 --   select jobname, status, return_message, start_time from cron.job_run_details
@@ -54,4 +54,4 @@ select cron.schedule('sourcer-ads',     '37 10 * * *',     $$select private.disp
 -- Changing the token later:
 --   select vault.update_secret((select id from vault.secrets where name = 'github_dispatch_token'), 'github_pat_…');
 -- Stopping:
---   select cron.unschedule('sourcer-poll');  -- likewise sourcer-nightly, sourcer-ads
+--   select cron.unschedule('sourcer-nightly');  -- likewise sourcer-ads

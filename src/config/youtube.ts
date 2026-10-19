@@ -6,14 +6,12 @@
 
 /** Unit caps per stage of the nightly job. Leaves ~2,000 for manual checks. */
 export const YOUTUBE_BUDGET = {
-  /** Resolve YouTube links from Twitch creators' bios. */
-  twitchLinks: 300,
-  /** Search competitor names and promo codes (~20 searches). */
-  promoSearch: 2_000,
-  /** Title searches for new channels: one uploads + one live search per title. */
+  /** Search competitor mentions and promo codes (~15 searches). */
+  promoSearch: 1_500,
+  /** Topic searches for new channels: one per query in config/topics.ts. */
   discoverySearch: 1_400,
   /** Vet new candidates (~2 units per channel). */
-  vetting: 1_500,
+  vetting: 2_000,
   /** Refresh tracked channels' recent uploads (~2 units per channel). */
   refresh: 1_500,
   /** Hard ceiling across all stages for one quota day. */
@@ -24,12 +22,16 @@ export const YOUTUBE_BUDGET = {
 export const DISCOVERY = {
   /** Uploads considered when vetting a channel. */
   recentUploads: 20,
-  /** At least this share of recent uploads must be about target titles. */
-  minTitleShare: 0.5,
+  /**
+   * At least this share of recent uploads must be about short-term rentals.
+   * Lower than a pure-niche bar: many good host channels mix in general
+   * real estate. EV coverage is not required; it's shown and filterable.
+   */
+  minStrShare: 0.3,
   /** Uploads in the last 30 days. */
-  minUploads30d: 4,
+  minUploads30d: 2,
   /** Median views of recent uploads (older than 2 days, long-form preferred). */
-  minMedianViews: 1_000,
+  minMedianViews: 300,
   maxMedianViews: 250_000,
   /** Admission caps so tracking can never flood. */
   maxNewPerDay: 25,
@@ -39,10 +41,10 @@ export const DISCOVERY = {
   /** Search scope. */
   regionCode: "US",
   relevanceLanguage: "en",
-  publishedWithinDays: 3,
+  publishedWithinDays: 14,
 } as const;
 
-/** Promo-code search scope. */
+/** Competitor-mention search scope. */
 export const PROMO_SEARCH = {
   publishedWithinDays: 30,
   maxResults: 25,

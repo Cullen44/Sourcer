@@ -1,12 +1,12 @@
 name: YouTube check
 
-# Manual: verifies YOUTUBE_API_KEY works and previews a promo-code search.
+# Manual: verifies YOUTUBE_API_KEY works and previews a search.
 on:
   workflow_dispatch:
     inputs:
       query:
         description: Search query to preview
-        default: '"Kalshi" promo code'
+        default: 'airbnb EV charger'
 
 jobs:
   check:

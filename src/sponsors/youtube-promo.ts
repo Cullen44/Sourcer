@@ -1,4 +1,5 @@
 import type { Db } from "../db";
+import { COMPETITORS } from "../config/competitors";
 import { PROMO_SEARCH } from "../config/youtube";
 import type { YouTubeClient } from "../youtube/client";
 import { analyze, type CompetitorRef } from "./codes";
@@ -11,18 +12,22 @@ export async function loadCompetitors(db: Db): Promise<CompetitorRef[]> {
 }
 
 /**
- * Search YouTube for each competitor ("Name" promo code), then for known codes
+ * Search YouTube for each competitor (its searchQueries in config/competitors.ts,
+ * else "Name" promo code), then for known codes
  * oldest-searched first, until the stage budget runs out. Every video that
  * mentions a competitor becomes a sponsor mention; codes found in it are added
  * to promo_codes so they get searched in turn. Channels found this way become
- * discovery candidates, so gaming creators among them get vetted like any other.
+ * discovery candidates, so host creators among them get vetted like any other.
  */
 export async function runPromoSearch(db: Db, yt: YouTubeClient, now = new Date()) {
   const competitors = await loadCompetitors(db);
   const publishedAfter = new Date(now.getTime() - PROMO_SEARCH.publishedWithinDays * DAY);
   const stats = { searches: 0, mentions: 0, newCodes: 0 };
 
-  const queries: { q: string; codeId?: number }[] = competitors.map((c) => ({ q: `"${c.name}" promo code` }));
+  const queries: { q: string; codeId?: number }[] = competitors.flatMap((c) => {
+    const configured = COMPETITORS.find((x) => x.name === c.name)?.searchQueries ?? [];
+    return (configured.length ? configured : [`"${c.name}" promo code`]).map((q) => ({ q }));
+  });
   const codes = await db.promoCode.findMany({
     orderBy: [{ lastSearchedAt: { sort: "asc", nulls: "first" } }, { firstSeenAt: "asc" }],
     include: { competitor: true },
@@ -66,7 +71,6 @@ async function recordVideos(
       const url = `https://www.youtube.com/watch?v=${v.id}`;
       const data = {
         platform: "youtube",
-        creatorId: channel.creatorId,
         externalChannelId: v.snippet.channelId,
         channelTitle: v.snippet.channelTitle,
         title: v.snippet.title,
@@ -77,7 +81,7 @@ async function recordVideos(
       await db.sponsorMention.upsert({
         where: { competitorId_url: { competitorId: f.competitorId, url } },
         create: { competitorId: f.competitorId, url, observedAt: now, ...data },
-        update: { viewCount: data.viewCount, creatorId: data.creatorId },
+        update: { viewCount: data.viewCount },
       });
       mentions++;
 

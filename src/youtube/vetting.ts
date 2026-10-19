@@ -1,9 +1,10 @@
-import { matchYoutubeTitle } from "../config/games";
+import { videoTopics } from "../config/topics";
 import { DISCOVERY } from "../config/youtube";
 
 export interface UploadFacts {
   title: string;
   tags?: string[];
+  description?: string | null;
   publishedAt: Date;
   viewCount: number | null;
   /** Null when hidden (likes) or turned off (comments). */
@@ -14,8 +15,10 @@ export interface UploadFacts {
 
 export interface ChannelMetrics {
   uploads: number;
-  titleShare: number;
-  primaryTitle: string | null;
+  /** Share of recent uploads about short-term rentals. */
+  strShare: number;
+  /** Share of recent uploads mentioning EVs or EV charging. */
+  evShare: number;
   medianViews: number | null;
   /** Median (likes + comments) / views per upload, over the same uploads as medianViews. */
   engagementRate: number | null;
@@ -27,11 +30,8 @@ const DAY = 86_400_000;
 
 /** Facts about a channel's recent uploads. Pure; no I/O. */
 export function computeMetrics(uploads: UploadFacts[], now: Date): ChannelMetrics {
-  const titles = uploads.map((u) => matchYoutubeTitle(`${u.title} ${(u.tags ?? []).join(" ")}`));
-  const matched = titles.filter((t): t is string => t !== null);
-  const counts = new Map<string, number>();
-  for (const t of matched) counts.set(t, (counts.get(t) ?? 0) + 1);
-  const primaryTitle = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const topics = uploads.map((u) => videoTopics(u));
+  const share = (t: "STR" | "EV") => (uploads.length ? topics.filter((ts) => ts.includes(t)).length / uploads.length : 0);
 
   // Fresh uploads haven't collected their views yet; Shorts inflate and distort.
   // Prefer long-form uploads older than 2 days when there are enough of them.
@@ -41,8 +41,8 @@ export function computeMetrics(uploads: UploadFacts[], now: Date): ChannelMetric
 
   return {
     uploads: uploads.length,
-    titleShare: uploads.length ? matched.length / uploads.length : 0,
-    primaryTitle,
+    strShare: share("STR"),
+    evShare: share("EV"),
     medianViews: median(basis.map((u) => u.viewCount!)),
     engagementRate: engagement(basis),
     uploads30d: uploads.filter((u) => now.getTime() - u.publishedAt.getTime() <= 30 * DAY).length,
@@ -53,8 +53,8 @@ export function computeMetrics(uploads: UploadFacts[], now: Date): ChannelMetric
 /** Whether a discovered channel passes the funnel; the reason when it doesn't. */
 export function vet(m: ChannelMetrics, cfg: typeof DISCOVERY = DISCOVERY): { ok: true } | { ok: false; reason: string } {
   if (m.uploads === 0) return { ok: false, reason: "no uploads" };
-  if (m.titleShare < cfg.minTitleShare) {
-    return { ok: false, reason: `off-topic: ${Math.round(m.titleShare * 100)}% of recent uploads on target titles` };
+  if (m.strShare < cfg.minStrShare) {
+    return { ok: false, reason: `off-topic: ${Math.round(m.strShare * 100)}% of recent uploads about short-term rentals` };
   }
   if (m.uploads30d < cfg.minUploads30d) return { ok: false, reason: `inactive: ${m.uploads30d} uploads in 30 days` };
   if (m.medianViews === null) return { ok: false, reason: "no settled uploads to measure" };

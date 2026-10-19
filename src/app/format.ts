@@ -12,18 +12,6 @@ export const num = (n: number | bigint | null | undefined) =>
 
 export const day = (d: Date) => d.toISOString().slice(0, 10);
 
-/** Twitch content classification label ids, as people say them. */
-const LABELS: Record<string, string> = {
-  Gambling: "Gambling",
-  MatureGame: "Mature game",
-  DrugsIntoxication: "Drugs/alcohol",
-  ProfanityVulgarity: "Profanity",
-  SexualThemes: "Sexual themes",
-  ViolentGraphic: "Graphic violence",
-  DebatedSocialIssuesAndPolitics: "Politics",
-};
-export const labelName = (id: string) => LABELS[id] ?? id;
-
 /** 0.034 → "3.4%"; "+5%" style with sign when signed. */
 export const pct = (x: number | null | undefined, signed = false) =>
   x === null || x === undefined ? "—" : `${signed && x > 0 ? "+" : ""}${(x * 100).toFixed(Math.abs(x) < 0.1 ? 1 : 0)}%`;

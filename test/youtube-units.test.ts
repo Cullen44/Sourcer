@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { matchYoutubeTitle } from "../src/config/games";
+import { videoTopics } from "../src/config/topics";
 import { parseDuration } from "../src/youtube/client";
-import { extractYoutubeRef } from "../src/youtube/twitch-links";
 import { computeMetrics, median, vet, type UploadFacts } from "../src/youtube/vetting";
 
 const now = new Date("2026-10-01T12:00:00Z");
@@ -13,50 +12,60 @@ function uploads(n: number, title: string, views: number, everyDays = 3, duratio
   }));
 }
 
-describe("matchYoutubeTitle", () => {
+describe("videoTopics", () => {
   it.each([
-    ["Best SMG in Black Ops 7 Ranked", "Call of Duty"],
-    ["NBA 2K27 MyCareer Ep. 4", "NBA 2K"],
-    ["FC 27 Ultimate Team pack opening", "EA FC"],
-    ["Madden 27 Franchise rebuild", "Madden"],
-    ["CS2 clutch highlights", "Counter-Strike"],
-    ["Tekken 8 Jin combos", "Tekken"],
-    ["SF6 Ranked to Master", "Street Fighter"],
-    ["Minecraft hardcore day 100", null],
-  ])("%s -> %s", (text, title) => expect(matchYoutubeTitle(text)).toBe(title));
+    ["How I Made $80k on Airbnb My First Year", [], "", ["STR"]],
+    ["Superhost secrets: 5 amenities guests love", [], "", ["STR"]],
+    ["VRBO vs Airbnb for new hosts", [], "", ["STR"]],
+    ["Is STR investing dead in 2026?", [], "", ["STR"]],
+    ["I installed an EV charger at my Airbnb", [], "", ["STR", "EV"]],
+    ["Tesla Model Y road trip", [], "", ["EV"]],
+    ["Cabin tour", ["airbnb", "cabin"], "", ["STR"]],
+    // EV in the description counts (gear lists, "my Tesla"); STR in the description doesn't (boilerplate).
+    ["Cabin tour", [], "Book my Airbnb! Filmed on the drive up in my Rivian", ["EV"]],
+    ["Strength training for beginners", [], "", []],
+    ["Minecraft hardcore day 100", [], "", []],
+  ])("%s", (title, tags, description, topics) => expect(videoTopics({ title, tags, description })).toEqual(topics));
 });
 
 describe("vetting", () => {
   it("admits a focused, active, mid-sized channel", () => {
-    const m = computeMetrics(uploads(15, "Tekken 8 ranked", 8_000), now);
-    expect(m.primaryTitle).toBe("Tekken");
-    expect(m.titleShare).toBe(1);
+    const m = computeMetrics(uploads(15, "Airbnb hosting tips", 8_000), now);
+    expect(m.strShare).toBe(1);
+    expect(m.evShare).toBe(0);
     expect(vet(m)).toEqual({ ok: true });
   });
 
-  it("rejects general gaming channels", () => {
-    const m = computeMetrics([...uploads(5, "Tekken 8 ranked", 8_000), ...uploads(10, "Minecraft survival", 8_000)], now);
-    expect(vet(m)).toEqual({ ok: false, reason: "off-topic: 33% of recent uploads on target titles" });
+  it("measures EV coverage without requiring it", () => {
+    const m = computeMetrics([...uploads(5, "EV charger for my Airbnb", 8_000), ...uploads(5, "Airbnb cleaning checklist", 8_000)], now);
+    expect(m.strShare).toBe(1);
+    expect(m.evShare).toBe(0.5);
+    expect(vet(m)).toEqual({ ok: true });
+  });
+
+  it("rejects channels that rarely cover short-term rentals", () => {
+    const m = computeMetrics([...uploads(3, "Airbnb update", 8_000), ...uploads(12, "Tesla Model 3 review", 8_000)], now);
+    expect(vet(m)).toEqual({ ok: false, reason: "off-topic: 20% of recent uploads about short-term rentals" });
   });
 
   it("rejects inactive, tiny and huge channels", () => {
-    expect(vet(computeMetrics(uploads(10, "Madden 27", 8_000, 20), now))).toMatchObject({ reason: "inactive: 2 uploads in 30 days" });
-    expect(vet(computeMetrics(uploads(10, "Madden 27", 300), now))).toMatchObject({ reason: "too small: median 300 views" });
-    expect(vet(computeMetrics(uploads(10, "Madden 27", 900_000), now))).toMatchObject({ reason: "too large: median 900,000 views" });
+    expect(vet(computeMetrics(uploads(10, "Airbnb tips", 8_000, 40), now))).toMatchObject({ reason: "inactive: 1 uploads in 30 days" });
+    expect(vet(computeMetrics(uploads(10, "Airbnb tips", 100), now))).toMatchObject({ reason: "too small: median 100 views" });
+    expect(vet(computeMetrics(uploads(10, "Airbnb tips", 900_000), now))).toMatchObject({ reason: "too large: median 900,000 views" });
   });
 
   it("measures long-form uploads when there are enough, ignoring Shorts", () => {
-    const m = computeMetrics([...uploads(6, "NBA 2K27", 5_000), ...uploads(10, "NBA 2K27 #shorts", 400_000, 1, 30)], now);
+    const m = computeMetrics([...uploads(6, "Airbnb tour", 5_000), ...uploads(10, "Airbnb tour #shorts", 400_000, 1, 30)], now);
     expect(m.medianViews).toBe(5_000);
   });
 
   it("ignores views on uploads younger than 2 days", () => {
-    const m = computeMetrics([{ title: "SF6", publishedAt: daysAgo(1), viewCount: 50, durationSeconds: 600 }, ...uploads(3, "SF6", 4_000)], now);
+    const m = computeMetrics([{ title: "VRBO", publishedAt: daysAgo(1), viewCount: 50, durationSeconds: 600 }, ...uploads(3, "VRBO", 4_000)], now);
     expect(m.medianViews).toBe(4_000);
   });
 
   it("engagement is the median per-upload rate, skipping hidden likes", () => {
-    const base = uploads(5, "Tekken 8", 10_000);
+    const base = uploads(5, "Airbnb", 10_000);
     const m = computeMetrics(
       [
         { ...base[0]!, likeCount: 300, commentCount: 100 }, // 4%
@@ -68,7 +77,7 @@ describe("vetting", () => {
       now,
     );
     expect(m.engagementRate).toBeCloseTo(0.05, 5); // median of 2%, 4%, 6%, 100%
-    expect(computeMetrics(uploads(5, "Tekken 8", 10_000), now).engagementRate).toBeNull();
+    expect(computeMetrics(uploads(5, "Airbnb", 10_000), now).engagementRate).toBeNull();
   });
 
   it("median", () => {
@@ -81,14 +90,4 @@ describe("vetting", () => {
 describe("parseDuration", () => {
   it.each([["PT15M33S", 933], ["PT1H2M", 3720], ["PT45S", 45], ["P1DT1H", 90000]])("%s", (iso, s) =>
     expect(parseDuration(iso)).toBe(s));
-});
-
-describe("extractYoutubeRef", () => {
-  it.each([
-    ["YT: https://www.youtube.com/@CoolGuy", { kind: "handle", handle: "CoolGuy" }],
-    ["youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw", { kind: "channel", id: "UC_x5XG1OV2P6uZZ5FSM9Ttw" }],
-    ["https://youtube.com/user/oldname", { kind: "user", name: "oldname" }],
-    ["https://www.youtube.com/c/CustomName", { kind: "custom", name: "CustomName" }],
-    ["just a bio, no links", null],
-  ])("%s", (text, ref) => expect(extractYoutubeRef(text)).toEqual(ref));
 });

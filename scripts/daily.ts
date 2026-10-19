@@ -1,20 +1,14 @@
 import { YOUTUBE_BUDGET } from "../src/config/youtube";
 import { createDb } from "../src/db";
-import { scanTwitchTitles } from "../src/sponsors/twitch-titles";
 import { runPromoSearch } from "../src/sponsors/youtube-promo";
-import { TwitchClient } from "../src/twitch/client";
-import { enrichCreators } from "../src/twitch/enrich";
-import { collectTwitchMetrics } from "../src/twitch/metrics";
 import { BudgetExceeded, QuotaExhausted, YouTubeClient } from "../src/youtube/client";
 import { refreshTracked, searchCandidates, vetCandidates } from "../src/youtube/discover";
-import { linkTwitchCreators } from "../src/youtube/twitch-links";
 import { recordUnits, unitsUsedToday } from "../src/youtube/usage";
 
-// Nightly enrichment and sponsor watch. Each stage is independent: one failing
+// Nightly YouTube sourcing and sponsor watch. Each stage is independent: one failing
 // doesn't stop the rest, and each YouTube stage is capped to its share of the
 // daily quota. Exits non-zero if any stage failed, so the workflow shows red.
 const db = createDb();
-const twitch = TwitchClient.fromEnv();
 const yt = YouTubeClient.fromEnv();
 const failures: string[] = [];
 let quotaGone = false;
@@ -53,10 +47,6 @@ async function youtubeStage(name: string, cap: number, fn: () => Promise<unknown
 }
 
 try {
-  await stage("twitch-enrich", () => enrichCreators(db, twitch));
-  await stage("twitch-title-scan", () => scanTwitchTitles(db));
-  await stage("twitch-metrics", () => collectTwitchMetrics(db, twitch));
-  await youtubeStage("youtube-twitch-links", YOUTUBE_BUDGET.twitchLinks, () => linkTwitchCreators(db, yt));
   await youtubeStage("youtube-promo-search", YOUTUBE_BUDGET.promoSearch, () => runPromoSearch(db, yt));
   await youtubeStage("youtube-discovery-search", YOUTUBE_BUDGET.discoverySearch, () => searchCandidates(db, yt));
   await youtubeStage("youtube-vetting", YOUTUBE_BUDGET.vetting, () => vetCandidates(db, yt));

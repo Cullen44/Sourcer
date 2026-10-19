@@ -1,5 +1,5 @@
 import type { Db } from "../db";
-import { matchYoutubeTitle } from "../config/games";
+import { videoTopics } from "../config/topics";
 import { DISCOVERY } from "../config/youtube";
 import { parseDuration, type VideoItem, type YouTubeClient } from "./client";
 import { computeMetrics, type ChannelMetrics } from "./vetting";
@@ -48,6 +48,7 @@ export async function syncChannels(
         vids.map((v) => ({
           title: v.snippet.title,
           tags: v.snippet.tags,
+          description: v.snippet.description,
           publishedAt: new Date(v.snippet.publishedAt),
           viewCount: v.statistics?.viewCount ? Number(v.statistics.viewCount) : null,
           likeCount: v.statistics?.likeCount ? Number(v.statistics.likeCount) : null,
@@ -69,8 +70,8 @@ export async function syncChannels(
             totalViews: toBigInt(c.statistics?.viewCount),
             videoCount: c.statistics?.videoCount ? Number(c.statistics.videoCount) : null,
             uploadsPlaylistId: c.contentDetails?.relatedPlaylists?.uploads ?? null,
-            primaryTitle: metrics.primaryTitle,
-            titleShare: metrics.titleShare,
+            strShare: metrics.strShare,
+            evShare: metrics.evShare,
             medianViews: metrics.medianViews,
             engagementRate: metrics.engagementRate,
             uploads30d: metrics.uploads30d,
@@ -91,7 +92,7 @@ export async function syncChannels(
               likeCount: toBigInt(v.statistics?.likeCount),
               commentCount: toBigInt(v.statistics?.commentCount),
               durationSeconds: parseDuration(v.contentDetails?.duration),
-              canonicalTitle: matchYoutubeTitle(`${v.snippet.title} ${(v.snippet.tags ?? []).join(" ")}`),
+              topics: videoTopics(v.snippet),
               fetchedAt: now,
             },
             update: {
@@ -99,6 +100,7 @@ export async function syncChannels(
               likeCount: toBigInt(v.statistics?.likeCount),
               commentCount: toBigInt(v.statistics?.commentCount),
               title: v.snippet.title,
+              topics: videoTopics(v.snippet),
               fetchedAt: now,
             },
           }),

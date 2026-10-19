@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 type Search = Promise<Record<string, string | undefined>>;
 
-const SOURCE_LABEL: Record<string, string> = { seed: "Known", youtube: "YouTube", twitch: "Twitch title", ad: "Meta ad" };
+const SOURCE_LABEL: Record<string, string> = { seed: "Known", youtube: "YouTube", ad: "Meta ad" };
 
 export default async function Sponsors({ searchParams }: { searchParams: Search }) {
   const sp = await searchParams;
@@ -56,25 +56,16 @@ export default async function Sponsors({ searchParams }: { searchParams: Search 
       </form>
       <div className="table-wrap">
         {mentions.length === 0 ? (
-          <div className="empty">None yet. Mentions appear after the nightly YouTube search and Twitch title scan.</div>
+          <div className="empty">None yet. Mentions appear after the nightly YouTube search.</div>
         ) : (
           <table>
-            <thead><tr><th>Competitor</th><th>Code</th><th>Where</th><th>Channel</th><th>Video / stream</th><th className="num">Views</th><th>Published</th></tr></thead>
+            <thead><tr><th>Competitor</th><th>Code</th><th>Channel</th><th>Video</th><th className="num">Views</th><th>Published</th></tr></thead>
             <tbody>
               {mentions.map((m) => (
                 <tr key={m.id}>
                   <td>{m.competitor.name}</td>
                   <td>{m.promoCode ? <span className="chip">{m.promoCode}</span> : "—"}</td>
-                  <td className="muted">{m.platform === "youtube" ? "YouTube" : "Twitch"}</td>
-                  <td>
-                    {m.platform === "youtube" ? (
-                      <Link href={`/youtube/${m.externalChannelId}`}>{m.channelTitle ?? m.externalChannelId}</Link>
-                    ) : m.creator ? (
-                      <Link href={`/creators/${m.creator.id}`}>{m.creator.displayName}</Link>
-                    ) : (
-                      m.channelTitle ?? m.externalChannelId
-                    )}
-                  </td>
+                  <td><Link href={`/youtube/${m.externalChannelId}`}>{m.channelTitle ?? m.externalChannelId}</Link></td>
                   <td><a href={m.url} target="_blank" rel="noreferrer">{m.title ?? m.url}</a></td>
                   <td className="num">{num(m.viewCount)}</td>
                   <td className="muted">{m.publishedAt ? day(m.publishedAt) : ago(m.observedAt)}</td>
@@ -84,7 +75,6 @@ export default async function Sponsors({ searchParams }: { searchParams: Search 
           </table>
         )}
       </div>
-      <p className="muted" style={{ fontSize: 12 }}>Twitch "views" are concurrent viewers when the stream was seen.</p>
 
       <h2>Promo codes</h2>
       <div className="table-wrap">
