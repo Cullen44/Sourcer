@@ -90,6 +90,8 @@ describe("Meta Ad Library parsing", () => {
     expect(reportedResultCount("~1.2K results")).toBe(1200);
     expect(reportedResultCount("1 result")).toBe(1);
     expect(reportedResultCount("nothing here")).toBeNull();
+    expect(reportedResultCount("No ads match your search criteria")).toBe(0);
+    expect(reportedResultCount("EVmatch isn't running ads in any country at the moment")).toBe(0);
   });
 
   it("treats a run as complete only when it reached the reported count", () => {

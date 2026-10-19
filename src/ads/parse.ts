@@ -178,6 +178,8 @@ export function describeShape(bodies: string[]): { adObjects: number; topKeys: s
 
 /** The "~1,200 results" count the Ad Library shows for a search, if present. */
 export function reportedResultCount(pageText: string): number | null {
+  // Advertisers with nothing running get a message instead of "0 results".
+  if (/no ads match your search|(isn't|is not|aren't|not currently) running (any )?ads|no results\b/i.test(pageText)) return 0;
   const m = /~?\s*([\d,.]+)\s*(K)?\s+results?\b/i.exec(pageText);
   if (!m) return null;
   const n = Number(m[1]!.replace(/,/g, ""));

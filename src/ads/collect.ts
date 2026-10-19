@@ -75,7 +75,8 @@ export async function collectPage(browser: Browser, pageId: string, debug?: (msg
     }
 
     const bodyText = async () => (await page.locator("body").innerText().catch(() => "")) ?? "";
-    const reported = reportedResultCount(await bodyText());
+    const text = await bodyText();
+    const reported = reportedResultCount(text);
     const current = async () => parseAds([await page.content(), ...bodies]).filter((a) => !a.pageId || a.pageId === pageId);
 
     // Only the first page of results is collected: further pages are
@@ -100,7 +101,9 @@ export async function collectPage(browser: Browser, pageId: string, debug?: (msg
       return { status: "blocked", ads: [], complete: false, reported: null, detail: `login wall (${url.slice(0, 80)})`, shape };
     }
     if (ads.length > 0) return { status: "ok", ads, complete, reported, detail, shape };
-    return { status: "empty", ads: [], complete: reported === 0, reported, detail: reported === 0 ? "Ad Library shows no active ads" : `no ads parsed; ${detail}`, shape };
+    // Neither ads nor a count: log the page's own wording about results (UI text, not ad content) to extend the patterns.
+    const hint = reported === null ? ` page says: "${(/[^.\n]{0,80}\b(ads?|results?)\b[^.\n]{0,80}/i.exec(text)?.[0] ?? "").trim().slice(0, 160)}"` : "";
+    return { status: "empty", ads: [], complete: reported === 0, reported, detail: reported === 0 ? "Ad Library shows no active ads" : `no ads parsed; ${detail}${hint}`, shape };
   } catch (err) {
     return { status: "error", ads: [], complete: false, reported: null, detail: String(err instanceof Error ? err.message : err).slice(0, 500), shape: describeShape(bodies) };
   } finally {
