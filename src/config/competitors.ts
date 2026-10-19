@@ -16,9 +16,9 @@ export interface CompetitorSeed {
 
 export const COMPETITORS: CompetitorSeed[] = [
   // The home brand, tracked the same way as a baseline for the competitors.
-  { name: "Boba Charge", priority: 1, fbPageIds: [], domains: ["bobacharge.com"], knownCodes: [], searchQueries: ['"Boba Charge"'] },
+  { name: "Boba Charge", priority: 1, fbPageIds: ["1148994618304224"], domains: ["bobacharge.com"], knownCodes: [], searchQueries: ['"Boba Charge"'] },
   // Airbnb's official charger partner for hosts.
-  { name: "ChargePoint", priority: 1, fbPageIds: [], domains: ["chargepoint.com"], knownCodes: [], searchQueries: ["ChargePoint airbnb", "ChargePoint home charger"] },
+  { name: "ChargePoint", priority: 1, fbPageIds: ["59788879399"], domains: ["chargepoint.com"], knownCodes: [], searchQueries: ["ChargePoint airbnb", "ChargePoint home charger"] },
   // Peer-to-peer charger sharing; hosts can rent their charger out.
-  { name: "EVmatch", priority: 1, fbPageIds: [], domains: ["evmatch.com"], knownCodes: [], searchQueries: ['"EVmatch"'] },
+  { name: "EVmatch", priority: 1, fbPageIds: ["1599619566964007"], domains: ["evmatch.com"], knownCodes: [], searchQueries: ['"EVmatch"'] },
 ];

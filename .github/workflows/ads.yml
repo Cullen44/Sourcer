@@ -39,4 +39,5 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run db:deploy
+      - run: npm run competitors:seed
       - run: npm run ads -- ${{ inputs.probe && '--probe' || '' }} ${{ inputs.page && format('--page={0}', inputs.page) || '' }}

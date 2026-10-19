@@ -70,7 +70,7 @@ test/            vitest; DB tests need TEST_DATABASE_URL
 | Workflow | Schedule (UTC) | Does |
 |---|---|---|
 | `nightly.yml` | 08:15 | `db:deploy`, `competitors:seed` (config → DB), `npm run daily`. |
-| `ads.yml` | 10:37 | Meta Ad Library, first ~30 ads per FB Page. No-op until Page IDs exist. |
+| `ads.yml` | 10:37 | `db:deploy`, `competitors:seed`, then Meta Ad Library, first ~30 ads per FB Page. |
 | `setup-db.yml` | manual | Migrations + competitor seed (fresh DB only). |
 | `ci.yml` | push | typecheck, migrate, tests, build. |
 
@@ -157,9 +157,8 @@ The old `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` secrets are unused and can be 
 ## State as of 2026-10-19
 
 - Fresh start: the pivot migration applies (and wipes) on the next Nightly.
-- **Facebook Page IDs for ChargePoint, EVmatch and Boba Charge are not set.**
-  The owner needs to find them (Ad Library → pick advertiser → copy `view_all_page_id`).
-  Until then Meta ads stay "Not set up".
+- FB Page IDs (2026-10-19): Boba Charge 1148994618304224 · ChargePoint 59788879399 ·
+  EVmatch 1599619566964007.
 - **Owner to re-run `supabase/scheduler.sql`** in Supabase. It unschedules the retired
   `sourcer-poll` job, which otherwise keeps dispatching the deleted `poll.yml` (harmless 404s).
 - Discovery thresholds are first guesses for a smaller niche than gaming; tune after
@@ -170,7 +169,6 @@ The old `TWITCH_CLIENT_ID`/`TWITCH_CLIENT_SECRET` secrets are unused and can be 
 - Referral vs paid tagging of mentions (YouTube `paidProductPlacementDetails`
   flag, "#ad"/"sponsored" language) was proposed before the pivot. It may matter
   less for chargers, which rarely have referral codes.
-- Look up FB Page IDs once the owner provides them; add to `config/competitors.ts`.
 - Possibly more competitors (Tesla Wall Connector, Wallbox, Emporia) if the owner asks.
 - Scoring + CSV/Markdown export for Claude review (needs ~1 week of data).
 
